@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mise.local/schema/recipe.schema.json",
+  "title": "Mise recipe",
+  "description": "A structured, cook-friendly recipe. schema_version 1. See schema/README.md for field docs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "title", "yield", "ingredients", "steps", "status"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "id": { "$ref": "#/$defs/slug" },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "yield": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_servings"],
+      "properties": {
+        "base_servings": { "type": "number", "exclusiveMinimum": 0 },
+        "label": { "type": "string" }
+      }
+    },
+    "times": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prep_minutes": { "type": "integer", "minimum": 0 },
+        "cook_minutes": { "type": "integer", "minimum": 0 },
+        "total_minutes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "advance_prep": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "tags": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "ingredients": { "type": "array", "items": { "$ref": "#/$defs/ingredient" } },
+    "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } },
+    "notes": { "type": "string" },
+    "cook_notes": { "type": "array", "items": { "type": "string" } },
+    "related_recipes": { "type": "array", "items": { "$ref": "#/$defs/slug" } },
+    "source": { "$ref": "#/$defs/source" },
+    "source_text_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "review_flags": { "type": "array", "items": { "$ref": "#/$defs/review_flag" } },
+    "status": { "enum": ["needs_review", "ready"] },
+    "image": {
+      "description": "Optional image file name, relative to the recipes folder (e.g. sri-lankan-lamb-curry-for-kothu.jpg).",
+      "type": "string"
+    },
+    "user": { "$ref": "#/$defs/user" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "unit": {
+      "description": "null = countable item; the counting noun lives in the ingredient name.",
+      "enum": ["g", "kg", "ml", "l", "tsp", "tbsp", "cup", "fl_oz", "oz", "lb", "pinch", null]
+    },
+    "ingredient": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "short_name", "amount", "unit"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[0-9]{4}$" },
+        "group": { "type": "string" },
+        "name": { "type": "string", "minLength": 1 },
+        "short_name": { "type": "string", "minLength": 1 },
+        "prep": { "type": "string" },
+        "amount": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "amount_max": { "type": "number", "exclusiveMinimum": 0 },
+        "unit": { "$ref": "#/$defs/unit" },
+        "optional": { "type": "boolean", "default": false },
+        "substitutes": { "type": "string" },
+        "scales": { "type": "boolean", "default": true },
+        "aisle": {
+          "description": "Shopping-list aisle (phase 2), e.g. produce, spices, dairy.",
+          "type": "string"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "content"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "content": {
+          "description": "Instruction text. {0001} renders scaled amount + unit + short_name; {0001:name} renders short_name only.",
+          "type": "string",
+          "minLength": 1
+        },
+        "timer_seconds": { "type": "integer", "exclusiveMinimum": 0 },
+        "timer_max_seconds": { "type": "integer", "exclusiveMinimum": 0 },
+        "heat": { "enum": ["low", "medium_low", "medium", "medium_high", "high"] }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["book", "web", "family", "other"] },
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "page": { "type": "string" },
+        "url": { "type": "string" },
+        "original_filename": { "type": "string" }
+      }
+    },
+    "review_flag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "message"],
+      "properties": {
+        "path": { "type": "string" },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    },
+    "user": {
+      "description": "Personal annotations, merged in by the server from <id>.user.json. Never written by the converter.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "favorite": { "type": "boolean" },
+        "reviewed": { "type": "boolean" },
+        "last_cooked": { "type": "string", "format": "date" },
+        "cook_log": { "type": "array", "items": { "type": "string", "format": "date" } },
+        "updated_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
