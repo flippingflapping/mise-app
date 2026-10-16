@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -61,40 +62,18 @@ fun MiseNavHost(launch: LaunchRequest?, onLaunchHandled: () -> Unit, nav: NavHos
 
     NavHost(nav, startDestination = LibraryRoute) {
         composable<LibraryRoute> {
-            val libraryVm: LibraryViewModel = hiltViewModel()
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                val width = maxWidth
-                val twoPane = width >= TWO_PANE_MIN_WIDTH
-                var selected by rememberSaveable { mutableStateOfNullableString() }
-                if (!twoPane) {
-                    LibraryScreen(
-                        libraryVm, selectedId = null,
-                        onOpen = { nav.navigate(DetailRoute(it)) },
-                        onSettings = { nav.navigate(SettingsRoute()) },
-                    )
-                } else {
-                    Row(Modifier.fillMaxSize()) {
-                        LibraryScreen(
-                            libraryVm, selectedId = selected,
-                            onOpen = { selected = it },
-                            onSettings = { nav.navigate(SettingsRoute()) },
-                            modifier = Modifier.width((width * 0.38f).coerceAtLeast(320.dp)).fillMaxHeight(),
-                        )
-                        VerticalDivider()
-                        val id = selected
-                        if (id == null) {
-                            EmptyState(Icons.AutoMirrored.Outlined.MenuBook, "Pick a recipe", "Choose a recipe from the list to see it here.")
-                        } else {
-                            val vm = hiltViewModel<RecipeDetailViewModel, RecipeDetailViewModel.Factory>(key = "pane-$id") { it.create(id) }
-                            RecipeDetailScreen(
-                                vm, onBack = null,
-                                onCook = { step -> nav.navigate(CookingRoute(id, step)) },
-                                onOriginal = { nav.navigate(OriginalRoute(id)) },
-                                onOpenRecipe = { selected = it },
-                            )
-                        }
-                    }
-                }
+            LibraryWithDetail(
+                libraryVm = hiltViewModel(),
+                onOpenFullScreen = { nav.navigate(DetailRoute(it)) },
+                onSettings = { nav.navigate(SettingsRoute()) },
+            ) { id, onSelect ->
+                val vm = hiltViewModel<RecipeDetailViewModel, RecipeDetailViewModel.Factory>(key = "pane-$id") { it.create(id) }
+                RecipeDetailScreen(
+                    vm, onBack = null,
+                    onCook = { step -> nav.navigate(CookingRoute(id, step)) },
+                    onOriginal = { nav.navigate(OriginalRoute(id)) },
+                    onOpenRecipe = onSelect,
+                )
             }
         }
         composable<DetailRoute> { entry ->
@@ -124,4 +103,38 @@ fun MiseNavHost(launch: LaunchRequest?, onLaunchHandled: () -> Unit, nav: NavHos
     }
 }
 
-private fun mutableStateOfNullableString() = androidx.compose.runtime.mutableStateOf<String?>(null)
+/**
+ * The library. On wide windows (tablets, unfolded foldables) it becomes two panes — list and the
+ * selected recipe side by side; on phones tapping a recipe opens it full screen.
+ */
+@Composable
+fun LibraryWithDetail(
+    libraryVm: LibraryViewModel,
+    onOpenFullScreen: (String) -> Unit,
+    onSettings: () -> Unit,
+    detailPane: @Composable (id: String, onSelect: (String) -> Unit) -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val width = maxWidth
+        var selected by rememberSaveable { mutableStateOf<String?>(null) }
+        if (width < TWO_PANE_MIN_WIDTH) {
+            LibraryScreen(libraryVm, selectedId = null, onOpen = onOpenFullScreen, onSettings = onSettings)
+        } else {
+            Row(Modifier.fillMaxSize()) {
+                LibraryScreen(
+                    libraryVm, selectedId = selected,
+                    onOpen = { selected = it },
+                    onSettings = onSettings,
+                    modifier = Modifier.width((width * 0.38f).coerceAtLeast(320.dp)).fillMaxHeight(),
+                )
+                VerticalDivider()
+                val id = selected
+                if (id == null) {
+                    EmptyState(Icons.AutoMirrored.Outlined.MenuBook, "Pick a recipe", "Choose a recipe from the list to see it here.")
+                } else {
+                    detailPane(id) { selected = it }
+                }
+            }
+        }
+    }
+}

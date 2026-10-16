@@ -1,5 +1,6 @@
 package app.mise.ui.settings
 
+import androidx.core.net.toUri
 import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -149,7 +150,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, pairingLink: String?, onBack: (
                     val folderLabel = when (val f = s.folderUri) {
                         null -> "No folder chosen"
                         IMPORTED_FILES_ONLY -> "Imported files only"
-                        else -> android.net.Uri.parse(f).lastPathSegment ?: f
+                        else -> f.toUri().lastPathSegment ?: f
                     }
                     Text(folderLabel, style = MaterialTheme.typography.labelLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -251,7 +252,7 @@ private fun LanSettings(serverUrl: String, token: String, onScan: () -> Unit, on
     var showManual by remember { mutableStateOf(serverUrl.isBlank()) }
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            if (serverUrl.isBlank()) "Start the server on your PC (scripts/server), then scan the QR code it shows."
+            if (serverUrl.isBlank()) "Start the Mise server on your PC (scripts/server.ps1 or scripts/server.sh), then scan the QR code it shows."
             else "Paired with $serverUrl",
             style = MaterialTheme.typography.bodyMedium,
         )

@@ -19,6 +19,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLPathPart
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import java.io.IOException
@@ -109,7 +110,7 @@ class LanServerSource(
 
     private fun HttpRequestBuilder.auth() = header(HttpHeaders.Authorization, "Bearer $token")
 
-    private fun seg(id: String) = java.net.URLEncoder.encode(id, Charsets.UTF_8).replace("+", "%20")
+    private fun seg(id: String) = id.encodeURLPathPart()
 
     private suspend fun call(block: suspend () -> HttpResponse): HttpResponse = try {
         block()

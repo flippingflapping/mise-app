@@ -3,7 +3,6 @@ package app.mise.core.pairing
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 
 data class PairingInfo(val serverUrl: String, val token: String)
 
@@ -57,6 +56,7 @@ object PairingUri {
             dec(k) to dec(v)
         }
 
-    private fun enc(s: String) = URLEncoder.encode(s, StandardCharsets.UTF_8)
-    private fun dec(s: String) = URLDecoder.decode(s, StandardCharsets.UTF_8)
+    // The String-charset overloads: the Charset ones need Android API 33 (this runs on API 26+).
+    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+    private fun dec(s: String) = URLDecoder.decode(s, "UTF-8")
 }

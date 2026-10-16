@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -211,8 +212,9 @@ private fun StepPage(
                         contentDescription = AmountRenderer.chipSpoken(ing, factor, mode)
                     }) {
                         Text(a.text, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.width(140.dp))
-                        Text(ing.name + (ing.prep?.let { ", $it" } ?: ""), style = MaterialTheme.typography.headlineSmall)
+                            modifier = Modifier.widthIn(min = 96.dp).padding(end = 16.dp))
+                        Text(ing.name + (ing.prep?.let { ", $it" } ?: ""), style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.weight(1f))
                     }
                 }
             }

@@ -30,6 +30,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    lint {
+        // Also check :core (pure JVM) against this app's minSdk — it runs on the phone too.
+        checkDependencies = true
+        warningsAsErrors = false
+        // aapt only accepts <adaptive-icon> under mipmap-anydpi-v26, which lint calls redundant at minSdk 26.
+        disable += "ObsoleteSdkInt"
+    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -40,6 +47,10 @@ android {
             // Robolectric downloads its Android jars from Maven Central; use Google's mirror (see settings.gradle.kts).
             it.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2")
             it.systemProperty("mise.repoRoot", rootProject.projectDir.parentFile.absolutePath)
+            // ./gradlew :app:testDebugUnitTest -Pmise.screenshots=true  → refreshes docs/screenshots
+            it.systemProperty("mise.writeScreenshots", (project.findProperty("mise.screenshots") ?: "false").toString())
+            it.systemProperty("mise.e2eUrl", (project.findProperty("mise.e2eUrl") ?: "").toString())
+            it.systemProperty("mise.e2eToken", (project.findProperty("mise.e2eToken") ?: "").toString())
         }
     }
 }
@@ -77,6 +88,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
@@ -105,4 +117,6 @@ dependencies {
     testImplementation(libs.ktor.client.mock)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.work.testing)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
 }

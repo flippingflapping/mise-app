@@ -200,7 +200,7 @@ object AmountRenderer {
         val shownMax = if (isRange) max else null
         val pluralBasis = shownMax ?: min
         val unitText = unit?.let { Units.label(it, pluralBasis) }
-        val spokenAmount = if (isRange) "${SpokenNumbers.speak(loText)} to ${SpokenNumbers.speak(hiText!!)}"
+        val spokenAmount = if (isRange) "${SpokenNumbers.speak(loText)} to ${SpokenNumbers.speak(hiText)}"
         else SpokenNumbers.speak(loText)
         val spoken = listOfNotNull(spokenAmount, unit?.let { Units.spokenLabel(it, pluralBasis) }).joinToString(" ")
         return RenderedAmount(min, shownMax, unit, amountText, unitText, false, spoken)

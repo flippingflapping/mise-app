@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mise.core.timer.KitchenTimer
 import app.mise.core.timer.KitchenTimer.Phase
@@ -85,11 +86,16 @@ private fun TimerCard(t: KitchenTimer, now: Long, actions: TimerActions, large: 
         Phase.PAUSED -> colors.surfaceVariant
         Phase.RUNNING -> colors.secondaryContainer
     }
-    Card(colors = CardDefaults.cardColors(containerColor = container), modifier = Modifier.widthIn(min = if (large) 220.dp else 180.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = container), modifier = Modifier.width(if (large) 280.dp else 248.dp)) {
         Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f, fill = false)) {
-                    Text(t.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        t.label,
+                        style = if (large) MaterialTheme.typography.titleMedium else MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     val status = when (t.phase) {
                         Phase.RUNNING -> StepTimers.clock(t.remaining(now))
                         Phase.PAUSED -> "${StepTimers.clock(t.remaining(now))} paused"
@@ -100,6 +106,8 @@ private fun TimerCard(t: KitchenTimer, now: Long, actions: TimerActions, large: 
                         status,
                         style = if (large) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = if (alerting) Modifier.semantics { liveRegion = LiveRegionMode.Assertive } else Modifier,
                     )
                 }

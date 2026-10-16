@@ -8,7 +8,7 @@ import app.mise.data.repo.LibraryItem
 import app.mise.data.repo.RecipeRepository
 import app.mise.data.repo.SyncResult
 import app.mise.data.settings.Settings
-import app.mise.data.settings.SettingsRepository
+import app.mise.data.settings.SettingsStore
 import app.mise.data.settings.SourceKind
 import app.mise.data.source.SourceException
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,7 +40,7 @@ data class LibraryUiState(
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val repository: RecipeRepository,
-    settings: SettingsRepository,
+    settings: SettingsStore,
 ) : ViewModel() {
     private val filters = MutableStateFlow(LibraryFilters())
 

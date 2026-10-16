@@ -6,8 +6,8 @@
   configure, and every request carries the access token. See README "Security notes".
   TODO: optional HTTPS with a self-signed certificate pinned at pairing time.
 -->
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

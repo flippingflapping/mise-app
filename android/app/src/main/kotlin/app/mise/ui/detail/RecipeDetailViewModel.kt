@@ -12,7 +12,7 @@ import app.mise.core.timer.KitchenTimer
 import app.mise.core.units.UnitMode
 import app.mise.data.repo.RecipeDetail
 import app.mise.data.repo.RecipeRepository
-import app.mise.data.settings.SettingsRepository
+import app.mise.data.settings.SettingsStore
 import app.mise.data.settings.SourceKind
 import app.mise.timers.TimerController
 import dagger.assisted.Assisted
@@ -51,7 +51,7 @@ data class DetailUiState(
 class RecipeDetailViewModel @AssistedInject constructor(
     @Assisted val recipeId: String,
     private val repository: RecipeRepository,
-    settings: SettingsRepository,
+    settings: SettingsStore,
     val timers: TimerController,
 ) : ViewModel() {
     @AssistedFactory

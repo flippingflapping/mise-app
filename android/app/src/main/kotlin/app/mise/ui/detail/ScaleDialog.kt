@@ -1,19 +1,16 @@
 package app.mise.ui.detail
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -50,7 +47,7 @@ fun parseAmount(text: String): Double? {
     }?.takeIf { it > 0 }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ScaleByIngredientDialog(
     ingredient: Ingredient,
@@ -61,7 +58,6 @@ fun ScaleByIngredientDialog(
     val units = remember(ingredient) { ScaleByIngredient.inputUnits(ingredient) }
     var unit by remember { mutableStateOf(ingredient.unit) }
     var text by remember { mutableStateOf("") }
-    var menu by remember { mutableStateOf(false) }
     val amount = parseAmount(text)
     val factor = amount?.let { ScaleByIngredient.factor(ingredient, it, unit) }
     fun label(u: MeasureUnit?) = u?.let { Units.label(it, 2.0) } ?: ingredient.shortName
@@ -73,33 +69,20 @@ fun ScaleByIngredientDialog(
             Column {
                 Text("How much ${ingredient.shortName} have you got?", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(8.dp))
-                Row {
-                    OutlinedTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        label = { Text("Amount") },
-                        singleLine = true,
-                        isError = text.isNotBlank() && amount == null,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { factor?.let { onApply(amount, unit) } }),
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (units.size > 1) {
-                        Spacer(Modifier.width(8.dp))
-                        ExposedDropdownMenuBox(expanded = menu, onExpandedChange = { menu = it }, modifier = Modifier.weight(1f)) {
-                            OutlinedTextField(
-                                value = label(unit),
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Unit") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(menu) },
-                                modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-                            )
-                            ExposedDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                units.forEach { u ->
-                                    DropdownMenuItem(text = { Text(label(u)) }, onClick = { unit = u; menu = false })
-                                }
-                            }
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("Amount") },
+                    singleLine = true,
+                    isError = text.isNotBlank() && amount == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (amount != null && factor != null) onApply(amount, unit) }),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (units.size > 1) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        units.forEach { u ->
+                            FilterChip(selected = u == unit, onClick = { unit = u }, label = { Text(label(u)) })
                         }
                     }
                 }
@@ -110,7 +93,7 @@ fun ScaleByIngredientDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onApply(amount!!, unit) }, enabled = factor != null) { Text("Scale recipe") }
+            TextButton(onClick = { if (amount != null) onApply(amount, unit) }, enabled = factor != null) { Text("Scale recipe") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

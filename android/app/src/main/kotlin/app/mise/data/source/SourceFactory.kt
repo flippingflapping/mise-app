@@ -1,5 +1,6 @@
 package app.mise.data.source
 
+import androidx.core.net.toUri
 import android.content.Context
 import android.net.Uri
 import app.mise.data.settings.Settings
@@ -29,7 +30,7 @@ class SourceFactory @Inject constructor(
             SourceKind.LAN -> LanServerSource(http, settings.serverUrl, settings.token)
             SourceKind.FOLDER -> FolderImportSource(
                 listOfNotNull(
-                    settings.folderUri?.takeIf { it.startsWith("content:") }?.let { DocumentFileTree(context, Uri.parse(it)) },
+                    settings.folderUri?.takeIf { it.startsWith("content:") }?.let { DocumentFileTree(context, it.toUri()) },
                     JavaFileTree(FolderImportSource.importedDir(context)),
                 ),
             )
