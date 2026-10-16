@@ -75,10 +75,10 @@ decisions I made on my own (with the choice and why). Progress is tracked at the
 | M2 | `:core` scaling, units, formatting, placeholders, timer state machine + tests | ✅ |
 | M3 | Converter: sync, batch + resume, validators, retry loop, manifest | ✅ |
 | M4 | Server: endpoints, auth, sidecars, ETags, folder watching, QR pairing | ✅ |
-| M5 | App read-only: Library + Detail, bundled sample, LAN source, Room cache | ⏳ |
-| M6 | Cooking mode + timers (foreground service, notifications, multi-timer tray) | ⏳ |
-| M7 | Settings, QR pairing, folder import, annotations sync, polish | ⏳ |
-| M8 | Docs: README setup guide, converting guide | ⏳ |
+| M5 | App read-only: Library + Detail, bundled sample, LAN source, Room cache | ✅ |
+| M6 | Cooking mode + timers (foreground service, notifications, multi-timer tray) | ✅ |
+| M7 | Settings, QR pairing, folder import, annotations sync, polish | ✅ |
+| M8 | Docs: README setup guide, converting guide | ✅ |
 
 ---
 
@@ -248,3 +248,50 @@ changed ids. Startup banner prints the LAN URL, token and a terminal QR; `http:/
 shows the QR as SVG **only to the PC itself** (it contains the token). Run scripts for bash and
 PowerShell in `scripts/`. 16 server tests (incl. a real watcher test) + a manual smoke test of the
 binary. The PowerShell scripts could not be executed in the (Linux) build environment.
+
+**M5–M7 — done** (built together; one commit for the app, one for verification and fixes).
+* Data: `RecipeSource` interface + `LanServerSource` (Ktor/OkHttp, list ETag → 304, friendly errors),
+  `FolderImportSource` (SAF folder and/or individually imported files), `BundledSampleSource` (the
+  fixture itself, packaged from `fixtures/` at build time), `CloudApiSource` stub. Offline-first
+  `RecipeRepository`: Room is the only thing the UI reads; sync pushes dirty annotations, then pulls by
+  ETag and removes recipes the source no longer has. Room v2 with a hand-written 1→2 migration and a
+  migration test against the genuinely exported v1 schema. Sync on open, pull-to-refresh, optional
+  WorkManager job (6 h, unmetered).
+* UI (Compose, Material 3, dynamic colour, dark mode): Library (search, tag chips, favourites,
+  recently cooked, needs-review badge, two panes ≥ 720 dp), Detail (everything in §4.2), Cooking mode
+  (pager, huge text, ingredients-used, keep-awake, system bars hidden), Settings (QR via Google code
+  scanner + `mise://pair` deep link with confirmation, manual entry, test connection, folder picker),
+  View original.
+* Timers: `TimerStore` (persisted) + `TimerController` + `specialUse` foreground service + exact-alarm
+  backstop + alarm-channel notifications with +1 min / To max / Done actions. If notifications are
+  blocked, the service rings and vibrates itself.
+* Verification: 33 app tests (repository, HTTP client with MockEngine, sources, Room migration, timer
+  persistence, and Robolectric UI tests that render the real screens and write the README
+  screenshots); a live end-to-end test of the Kotlin client against the running Python server
+  (passed); `lintDebug` clean with `checkDependencies` (covers `:core`).
+
+Things worth knowing:
+* **No emulator/device in the build environment** (no KVM), so the app has been verified with
+  Robolectric rendering, unit tests and lint — not on a physical phone. Foreground-service timing
+  with the screen locked, the code scanner and SAF folder picking need a real device to confirm.
+* Lint caught `URLEncoder.encode(String, Charset)` (API 33) in both `:app` and `:core`; it would have
+  crashed pairing and sync on Android 8–12. Fixed, and lint now checks `:core` too.
+* The screenshots revealed a timer-tray layout bug (squeezed countdown); fixed.
+* Under Robolectric, any text field inside a dialog over the detail screen never lets Compose go idle
+  (reproduced with stock Material components only). The scale-by-ingredient dialog is therefore
+  tested on its own plus through the ViewModel. I also swapped its unit dropdown for filter chips.
+* Room's exported schemas are added to **debug** assets because Robolectric only reads the variant's
+  merged assets (a few KB; not in release builds).
+* Gradle uses Google's Maven Central mirror first (Maven Central returned HTTP 429 here).
+
+**M8 — done.** README (5-minute PC + phone setup for a non-Android developer, firewall, autostart,
+security notes, backups, troubleshooting, developer notes), `docs/converting.md`, screenshots in
+`docs/screenshots/` generated from the real UI, CI workflow (`.github/workflows/ci.yml`) that runs
+all tests and publishes the debug APK as a downloadable artifact.
+
+## 9. Next steps (not built)
+
+* Shopping list UI (the data model already has `aisle`; scaling/units are in `:core`).
+* PDF / photo import in the converter (reader stubs exist in `inputs.py`).
+* Optional HTTPS with a self-signed certificate pinned at pairing.
+* `CloudApiSource`.

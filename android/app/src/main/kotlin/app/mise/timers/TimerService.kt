@@ -35,6 +35,7 @@ class TimerService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var loop: Job? = null
+    private val fallback by lazy { AlarmFallback(this) }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -51,7 +52,9 @@ class TimerService : Service() {
         while (true) {
             val now = clock.now()
             val sound = settings.current().timerSound
-            for ((timer, alert) in store.tick(now)) TimerNotifications.alert(this, timer, alert, sound)
+            val alerts = store.tick(now)
+            for ((timer, alert) in alerts) TimerNotifications.alert(this, timer, alert, sound)
+            if (alerts.isNotEmpty() && !TimerNotifications.canPost(this)) fallback.ring(sound)
             val timers = store.timers.value
             if (!store.hasActive) break
             if (TimerNotifications.canPost(this)) {
@@ -71,6 +74,7 @@ class TimerService : Service() {
     }
 
     override fun onDestroy() {
+        fallback.stop()
         scope.cancel()
         super.onDestroy()
     }

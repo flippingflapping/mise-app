@@ -52,6 +52,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.mise.core.model.Recipe
 import app.mise.core.model.Step
@@ -85,7 +88,7 @@ fun CookingModeScreen(viewModel: CookingViewModel, startStep: Int, onClose: () -
         scope.launch { snackbar.showSnackbar("Notifications are off — timers will only ring while Mise is open.") }
     })
 
-    KeepScreenOn(state.keepScreenOn)
+    CookingWindow(keepScreenOn = state.keepScreenOn)
 
     if (recipe == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -146,12 +149,20 @@ fun CookingModeScreen(viewModel: CookingViewModel, startStep: Int, onClose: () -
     }
 }
 
+/** Keeps the screen awake (if enabled) and hides the status/navigation bars; swipe from an edge to show them. */
 @Composable
-private fun KeepScreenOn(enabled: Boolean) {
+private fun CookingWindow(keepScreenOn: Boolean) {
     val view = LocalView.current
-    DisposableEffect(enabled) {
-        view.keepScreenOn = enabled
-        onDispose { view.keepScreenOn = false }
+    DisposableEffect(keepScreenOn) {
+        view.keepScreenOn = keepScreenOn
+        val window = (view.context as? android.app.Activity)?.window
+        val bars = window?.let { WindowCompat.getInsetsController(it, view) }
+        bars?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        bars?.hide(WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            view.keepScreenOn = false
+            bars?.show(WindowInsetsCompat.Type.systemBars())
+        }
     }
 }
 
