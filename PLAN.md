@@ -74,7 +74,7 @@ decisions I made on my own (with the choice and why). Progress is tracked at the
 | M1 | Contract: schema, fixtures, Pydantic + Kotlin models, cross-validation tests | ✅ |
 | M2 | `:core` scaling, units, formatting, placeholders, timer state machine + tests | ✅ |
 | M3 | Converter: sync, batch + resume, validators, retry loop, manifest | ✅ |
-| M4 | Server: endpoints, auth, sidecars, ETags, folder watching, QR pairing | ⏳ |
+| M4 | Server: endpoints, auth, sidecars, ETags, folder watching, QR pairing | ✅ |
 | M5 | App read-only: Library + Detail, bundled sample, LAN source, Room cache | ⏳ |
 | M6 | Cooking mode + timers (foreground service, notifications, multi-timer tray) | ⏳ |
 | M7 | Settings, QR pairing, folder import, annotations sync, polish | ⏳ |
@@ -239,3 +239,12 @@ unchanged); raw output of failures kept in `.mise/failed/`. Refusal / max_tokens
 Tests: 28 (fake client for the pipeline, plus the real SDK against a mock HTTP transport to pin the
 wire format). The opt-in live test is skipped without `ANTHROPIC_API_KEY`; **it has not been run in
 the build environment (no key there)** — run `pytest -m live` once with your key.
+
+**M4 — done.** `mise-server` (FastAPI + uvicorn): `/api/v1/health` (open), `/recipes` (summaries +
+complete id list + list ETag → 304), `/recipes/{id}` (ETag/304), `/source`, `/image`,
+`PUT /annotations` (sidecar only; merged on read). Constant-time bearer-token check. Schema +
+semantic validation on load; invalid files logged and skipped. `watchfiles` watcher reloads only the
+changed ids. Startup banner prints the LAN URL, token and a terminal QR; `http://localhost:<port>/`
+shows the QR as SVG **only to the PC itself** (it contains the token). Run scripts for bash and
+PowerShell in `scripts/`. 16 server tests (incl. a real watcher test) + a manual smoke test of the
+binary. The PowerShell scripts could not be executed in the (Linux) build environment.
