@@ -42,9 +42,8 @@ decisions I made on my own (with the choice and why). Progress is tracked at the
 | `<id>.source.txt` | converter | the raw input, for "View original" |
 | `<id>.user.json` | server (from the app) | annotations: my notes, favorite, reviewed, cook log |
 | `<id>.jpg/.png/.webp` | you (optional) | recipe photo |
-| `.mise/manifest.json` | converter | idempotency manifest (source → hash → id → status) |
+| `.mise/manifest.json` | converter | idempotency manifest (source → hash → id → status) and the in-flight batch id, so an interrupted run resumes |
 | `.mise/failed/…` | converter | raw model output of failed conversions, for inspection |
-| `.mise/batch.json` | converter | in-flight batch id, so an interrupted run resumes |
 
 ---
 
@@ -74,7 +73,7 @@ decisions I made on my own (with the choice and why). Progress is tracked at the
 |---|---|---|
 | M1 | Contract: schema, fixtures, Pydantic + Kotlin models, cross-validation tests | ✅ |
 | M2 | `:core` scaling, units, formatting, placeholders, timer state machine + tests | ✅ |
-| M3 | Converter: sync, batch + resume, validators, retry loop, manifest | ⏳ |
+| M3 | Converter: sync, batch + resume, validators, retry loop, manifest | ✅ |
 | M4 | Server: endpoints, auth, sidecars, ETags, folder watching, QR pairing | ⏳ |
 | M5 | App read-only: Library + Detail, bundled sample, LAN source, Room cache | ⏳ |
 | M6 | Cooking mode + timers (foreground service, notifications, multi-timer tray) | ⏳ |
@@ -229,3 +228,14 @@ promotion/demotion, rounding, countables, ranges, non-scaling, to taste), `Fract
 missing ids, spoken text for TalkBack, ingredients-used-by-step), `KitchenTimer` state machine
 (check-now / +1 min / to max / pause), `StepTimers` policy (overnight → advance prep), `RecipeSearch`,
 `PairingUri`. 46 table-driven tests, including the brief's "2¼ lb lamb" and "10–12 curry leaves".
+
+**M3 — done.** `convert run | status | retry`. Sync mode (threaded, `concurrency` in config) and
+batch mode (Message Batches API; batch id persisted in the manifest before polling, so Ctrl+C or a
+crash resumes the same batch). Structured outputs with an LLM-facing schema (within the documented
+24-optional / 16-union limits — a test enforces it), cached system prompt with the fixture as worked
+example (filled in from `fixtures/` at runtime so it can't drift), adaptive thinking at effort
+`medium`. Deterministic post-validation; one retry turn with the errors (thinking blocks passed back
+unchanged); raw output of failures kept in `.mise/failed/`. Refusal / max_tokens are not retried.
+Tests: 28 (fake client for the pipeline, plus the real SDK against a mock HTTP transport to pin the
+wire format). The opt-in live test is skipped without `ANTHROPIC_API_KEY`; **it has not been run in
+the build environment (no key there)** — run `pytest -m live` once with your key.
