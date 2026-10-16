@@ -73,7 +73,7 @@ decisions I made on my own (with the choice and why). Progress is tracked at the
 | # | Milestone | Status |
 |---|---|---|
 | M1 | Contract: schema, fixtures, Pydantic + Kotlin models, cross-validation tests | ✅ |
-| M2 | `:core` scaling, units, formatting, placeholders, timer state machine + tests | ⏳ |
+| M2 | `:core` scaling, units, formatting, placeholders, timer state machine + tests | ✅ |
 | M3 | Converter: sync, batch + resume, validators, retry loop, manifest | ⏳ |
 | M4 | Server: endpoints, auth, sidecars, ETags, folder watching, QR pairing | ⏳ |
 | M5 | App read-only: Library + Detail, bundled sample, LAN source, Room cache | ⏳ |
@@ -122,8 +122,9 @@ decisions I made on my own (with the choice and why). Progress is tracked at the
 7. **US volumes**: ≥ ¼ cup → cups (nearest ⅛), smaller → tbsp/tsp. fl oz is kept only in Original
    mode when authored that way.
 8. **Rounding**: g/ml nearest 1 below 50, nearest 5 above (per brief); kg/l nearest 0.05 shown as a
-   fraction glyph when it lands on one, else a short decimal ("1.1 kg"); oz nearest ¼; lb nearest ¼
-   (gives the brief's "2¼ lb lamb"); tsp nearest ⅛, tbsp nearest ¼ with thirds allowed.
+   fraction glyph only on exact quarters, else a short decimal ("1.1 kg", "1.35 kg"); oz nearest ¼;
+   lb nearest ⅛ (gives the brief's "2¼ lb lamb" and keeps 500 g honest as "1⅛ lb" rather than "1 lb");
+   tsp nearest ⅛ (with ⅓/⅔), tbsp nearest ¼ (with ⅓/⅔), cups nearest ⅛ (with ⅓/⅔ — ⅓ cup is a real measure).
    **At scale 1 with no unit conversion, authored values are shown exactly as written.**
 9. **Servings stepper**: steps of ½ at or below 2 servings, steps of 1 above; minimum ½.
    Scale-by-ingredient can produce any factor; the stepper snaps back onto the grid on the next tap.
@@ -221,3 +222,10 @@ schema with networknt json-schema-validator).
 * Added `source_text_sha256`, `created_at`, `updated_at` to the expected fixture.
 * Gradle resolves Maven Central artifacts through Google's mirror first, because Maven Central's
   CDN returns HTTP 429 to some shared networks (it did in the build environment).
+
+**M2 — done.** `:core` (pure Kotlin/JVM, no Android): `AmountRenderer` (scaling, Original/Metric/US,
+promotion/demotion, rounding, countables, ranges, non-scaling, to taste), `Fractions` (glyphs, thirds),
+`Servings` stepper + `ScaleByIngredient`, `StepRenderer` (placeholders → chips, warning chips for
+missing ids, spoken text for TalkBack, ingredients-used-by-step), `KitchenTimer` state machine
+(check-now / +1 min / to max / pause), `StepTimers` policy (overnight → advance prep), `RecipeSearch`,
+`PairingUri`. 46 table-driven tests, including the brief's "2¼ lb lamb" and "10–12 curry leaves".
