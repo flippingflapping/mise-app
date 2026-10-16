@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The PC companion server speaks plain HTTP on the home network. Android's network security config
+  cannot allow cleartext for an IP range (only for named domains), and home servers are usually
+  reached by IP, so cleartext is allowed app-wide. The app only ever talks to the server URL you
+  configure, and every request carries the access token. See README "Security notes".
+  TODO: optional HTTPS with a self-signed certificate pinned at pairing time.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

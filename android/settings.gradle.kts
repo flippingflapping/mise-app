@@ -20,4 +20,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Mise"
-include(":core")
+include(":core", ":app")

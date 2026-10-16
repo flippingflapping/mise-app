@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mise</string>
+    <string name="channel_running">Running timers</string>
+    <string name="channel_running_desc">The ongoing notification while kitchen timers run</string>
+    <string name="channel_alarm">Timer alarms</string>
+    <string name="channel_alarm_desc">Rings when a timer finishes or it\'s time to check</string>
+    <string name="channel_alarm_silent">Timer alarms (silent)</string>
+    <string name="channel_alarm_silent_desc">Vibrates only, used when timer sound is off</string>
+</resources>
