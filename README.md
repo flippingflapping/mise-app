@@ -254,7 +254,7 @@ Run these in order with the server running; the first one that fails tells you w
 | 1 | On the PC (where the server runs) | `curl http://127.0.0.1:8765/api/v1/health` | The server isn't running, or uses another port. |
 | 2 | Same place | `curl http://192.168.x.x:8765/api/v1/health` (the address in the QR code) | Check `host = "0.0.0.0"` under `[server]` in `config.toml`. |
 | 3 | Windows PowerShell (if the server runs in WSL) | `curl.exe http://192.168.x.x:8765/api/v1/health` | Mirrored networking isn't active: check `.wslconfig`, then `wsl --shutdown`. |
-| 4 | Phone browser | `http://192.168.x.x:8765/api/v1/health` | A firewall, or the phone isn't on the same network (see below). |
+| 4 | Phone browser | `http://192.168.x.x:8765/api/v1/health` — type the `http://`; the server doesn't do https, and browsers often try https first | A firewall, or the phone isn't on the same network (see below). |
 | 5 | Mise → Settings → Test connection | | The message says why: *timed out* ≈ firewall, *refused* ≈ nothing listening on that port, *no route* ≈ different network. |
 
 If 1–3 work but 4 fails:
