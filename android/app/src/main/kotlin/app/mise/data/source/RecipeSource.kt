@@ -29,11 +29,35 @@ interface RecipeSource {
     /** Save my annotations. Throws [UnsupportedOperationException] if not supported. */
     suspend fun putAnnotations(id: String, a: Annotations)
 
+    /** What the server can do beyond reading recipes. */
+    suspend fun features(): ServerFeatures = ServerFeatures(canImport = false, canConvert = false)
+
+    /** Send pasted recipe text to be converted (PC server only). */
+    suspend fun importRecipe(text: String, title: String?, source: String?): ImportJob =
+        throw UnsupportedOperationException("Adding recipes needs the PC server")
+
+    /** Progress of an import; null if the server no longer knows it (e.g. it restarted). */
+    suspend fun importStatus(jobId: String): ImportJob? = null
+
     /** A friendly one-line description of the connection, for Settings → Test connection. */
     suspend fun testConnection(): String {
         val n = listRecipes(null).size
         return "Connected — $n recipe${if (n == 1) "" else "s"} available"
     }
+}
+
+data class ServerFeatures(val canImport: Boolean, val canConvert: Boolean)
+
+@kotlinx.serialization.Serializable
+data class ImportJob(
+    val id: String,
+    val filename: String,
+    /** saved | queued | converting | done | needs_review | failed */
+    val status: String,
+    @kotlinx.serialization.SerialName("recipe_id") val recipeId: String? = null,
+    val error: String? = null,
+) {
+    val finished: Boolean get() = status in setOf("saved", "done", "needs_review", "failed")
 }
 
 data class SourceCapabilities(

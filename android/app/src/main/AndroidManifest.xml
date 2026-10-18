@@ -46,6 +46,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="mise" android:host="pair" />
             </intent-filter>
+            <!-- Share recipe text from any app (browser, notes, messages) to add it. -->
+            <intent-filter android:label="Add to Mise">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <service
@@ -59,6 +65,9 @@
 
         <receiver
             android:name=".timers.TimerReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".plans.FeastReminderReceiver"
             android:exported="false" />
 
         <!-- WorkManager is initialised by MiseApp (Hilt worker factory). -->

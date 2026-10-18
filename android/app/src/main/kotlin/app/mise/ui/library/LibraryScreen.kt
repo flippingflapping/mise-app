@@ -1,6 +1,18 @@
 package app.mise.ui.library
 
 import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -57,7 +69,7 @@ import app.mise.ui.LocalNetworkPermission
 import app.mise.ui.components.EmptyState
 import app.mise.ui.components.StatusBanner
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel,
@@ -65,14 +77,49 @@ fun LibraryScreen(
     onOpen: (String) -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onAddRecipe: () -> Unit = {},
+    onShoppingLists: () -> Unit = {},
+    onMeals: () -> Unit = {},
+    /** kind is "shopping" or "meal"; ids in the order picked. */
+    onNewPlan: (kind: String, ids: List<String>) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val picking = state.picked.isNotEmpty()
+    BackHandler(enabled = picking) { viewModel.clearPicks() }
     Scaffold(
         modifier = modifier,
+        floatingActionButton = {
+            if (!picking) {
+                ExtendedFloatingActionButton(onClick = onAddRecipe, icon = { Icon(Icons.Filled.Add, null) }, text = { Text("Add recipe") })
+            }
+        },
+        bottomBar = {
+            if (picking) {
+                BottomAppBar {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(onClick = { onNewPlan("shopping", state.picked); viewModel.clearPicks() }, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Filled.ShoppingCart, null); Spacer(Modifier.width(8.dp)); Text("Shopping list")
+                        }
+                        Button(onClick = { onNewPlan("meal", state.picked); viewModel.clearPicks() }, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Filled.Schedule, null); Spacer(Modifier.width(8.dp)); Text("Plan a meal")
+                        }
+                    }
+                }
+            }
+        },
         topBar = {
+            if (picking) {
+                TopAppBar(
+                    title = { Text("${state.picked.size} selected") },
+                    navigationIcon = { IconButton(onClick = viewModel::clearPicks) { Icon(Icons.Filled.Close, "Clear selection") } },
+                )
+                return@Scaffold
+            }
             TopAppBar(
                 title = { Text("Recipes") },
                 actions = {
+                    IconButton(onClick = onShoppingLists) { Icon(Icons.Filled.ShoppingCart, "Shopping lists") }
+                    IconButton(onClick = onMeals) { Icon(Icons.Filled.Schedule, "Meal plans") }
                     IconButton(onClick = viewModel::toggleFavorites) {
                         Icon(
                             Icons.Filled.Favorite,
@@ -169,7 +216,13 @@ fun LibraryScreen(
                             action = "Clear filters", onAction = viewModel::clearFilters)
                     }
                     else -> items(state.items, key = { it.id }) { item ->
-                        RecipeRow(item, selected = item.id == selectedId, onClick = { onOpen(item.id) })
+                        RecipeRow(
+                            item,
+                            selected = item.id == selectedId,
+                            picked = if (picking) item.id in state.picked else null,
+                            onClick = { if (picking) viewModel.togglePick(item.id) else onOpen(item.id) },
+                            onLongClick = { viewModel.togglePick(item.id) },
+                        )
                         HorizontalDivider(Modifier.padding(start = 16.dp))
                     }
                 }
@@ -188,10 +241,12 @@ private fun SectionHeader(text: String) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RecipeRow(item: LibraryItem, selected: Boolean, onClick: () -> Unit) {
+private fun RecipeRow(item: LibraryItem, selected: Boolean, picked: Boolean?, onClick: () -> Unit, onLongClick: () -> Unit) {
     val needsReview = item.status == RecipeStatus.NEEDS_REVIEW
     ListItem(
+        leadingContent = picked?.let { { Checkbox(checked = it, onCheckedChange = null) } },
         headlineContent = { Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         supportingContent = if (item.tags.isEmpty()) null else ({ Text(item.tags.joinToString(" · "), maxLines = 1) }),
         trailingContent = {
@@ -213,12 +268,12 @@ private fun RecipeRow(item: LibraryItem, selected: Boolean, onClick: () -> Unit)
         else ListItemDefaults.colors(),
         modifier = Modifier
             .heightIn(min = 64.dp)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "select for a shopping list or meal plan")
             .semantics(mergeDescendants = true) {
                 stateDescription = listOfNotNull(
                     "needs review".takeIf { needsReview },
                     "favorite".takeIf { item.favorite },
-                    "selected".takeIf { selected },
+                    "selected".takeIf { selected || picked == true },
                 ).joinToString(", ")
             },
     )

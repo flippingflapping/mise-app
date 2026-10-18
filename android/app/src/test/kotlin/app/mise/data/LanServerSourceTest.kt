@@ -88,6 +88,29 @@ class LanServerSourceTest {
         assertThat(msg(IOException("x"))).isEqualTo("Can't reach your PC")
     }
 
+    @Test fun importsRecipesAndFollowsTheJob() = runTest {
+        val s = source { req ->
+            when {
+                req.url.encodedPath.endsWith("/health") ->
+                    respond("""{"status":"ok","can_import":true,"can_convert":false}""", HttpStatusCode.OK, json)
+                req.method == HttpMethod.Post ->
+                    respond("""{"id":"j1","filename":"from-phone/x.txt","status":"saved","recipe_id":null,"error":null,"created_at":"x"}""", HttpStatusCode.Accepted, json)
+                req.url.encodedPath.endsWith("/imports/j1") ->
+                    respond("""{"id":"j1","filename":"from-phone/x.txt","status":"done","recipe_id":"curry"}""", HttpStatusCode.OK, json)
+                else -> respondError(HttpStatusCode.NotFound)
+            }
+        }
+        assertThat(s.features()).isEqualTo(app.mise.data.source.ServerFeatures(canImport = true, canConvert = false))
+        val job = s.importRecipe("2 eggs", "Eggs", null)
+        assertThat(job.status).isEqualTo("saved")
+        assertThat(job.finished).isTrue()
+        val body = (requests.first { it.method == HttpMethod.Post }.body as TextContent).text
+        assertThat(body).contains("\"text\":\"2 eggs\"")
+        assertThat(body).contains("\"title\":\"Eggs\"")
+        assertThat(s.importStatus("j1")!!.recipeId).isEqualTo("curry")
+        assertThat(s.importStatus("gone")).isNull()
+    }
+
     @Test fun testConnectionChecksHealthAndToken() = runTest {
         val s = source { req ->
             if (req.url.encodedPath.endsWith("/health")) respond("""{"status":"ok","version":"0.1.0","schema_version":1}""", HttpStatusCode.OK, json)

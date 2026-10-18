@@ -10,6 +10,7 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -46,7 +47,47 @@ class LanServerSource(
     private data class Listing(val recipes: List<RecipeSummary>, val ids: List<String> = emptyList())
 
     @Serializable
-    private data class Health(val status: String, val version: String = "?", val schema_version: Int = 0)
+    private data class Health(
+        val status: String,
+        val version: String = "?",
+        val schema_version: Int = 0,
+        val can_import: Boolean = false,
+        val can_convert: Boolean = false,
+    )
+
+    @Serializable
+    private data class ImportBody(val text: String, val title: String? = null, val source: String? = null)
+
+    override suspend fun features(): ServerFeatures {
+        val resp = call { http.get("$api/health") }
+        ensureOk(resp)
+        val h = decode { RecipeJson.lenient.decodeFromString(Health.serializer(), resp.bodyAsText()) }
+        return ServerFeatures(h.can_import, h.can_convert)
+    }
+
+    override suspend fun importRecipe(text: String, title: String?, source: String?): ImportJob {
+        val body = RecipeJson.canonical.encodeToString(ImportBody.serializer(), ImportBody(text, title, source))
+        val resp = call {
+            http.post("$api/recipes/import") {
+                auth()
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+        }
+        if (resp.status.value == 501) {
+            throw SourceException(SourceException.Reason.OTHER, "Your PC server is too old to accept recipes — update it")
+        }
+        ensureOk(resp)
+        listCache = null
+        return decode { RecipeJson.lenient.decodeFromString(ImportJob.serializer(), resp.bodyAsText()) }
+    }
+
+    override suspend fun importStatus(jobId: String): ImportJob? {
+        val resp = call { http.get("$api/imports/${seg(jobId)}") { auth() } }
+        if (resp.status == HttpStatusCode.NotFound) return null
+        ensureOk(resp)
+        return decode { RecipeJson.lenient.decodeFromString(ImportJob.serializer(), resp.bodyAsText()) }
+    }
 
     // Cached list response for If-None-Match: an unchanged library costs one 304.
     @Volatile private var listCache: Pair<String, List<RecipeSummary>>? = null

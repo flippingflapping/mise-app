@@ -296,4 +296,19 @@ class RecipeRepository @Inject constructor(
     }.getOrNull()
 
     suspend fun testConnection(s: Settings): Result<String> = runCatching { sources.source(s).testConnection() }
+
+    // ------------------------------------------------------------------ adding recipes
+
+    suspend fun serverFeatures(): Result<app.mise.data.source.ServerFeatures> =
+        runCatching { sources.source(settings.current()).features() }
+
+    suspend fun importRecipe(text: String, title: String?, source: String?): Result<app.mise.data.source.ImportJob> =
+        runCatching { sources.source(settings.current()).importRecipe(text, title, source) }
+
+    suspend fun importStatus(jobId: String): Result<app.mise.data.source.ImportJob?> =
+        runCatching { sources.source(settings.current()).importStatus(jobId) }
+
+    /** Decoded recipes, for planning features (shopping lists, feasts). */
+    suspend fun recipesById(ids: Collection<String>): Map<String, Recipe> =
+        ids.mapNotNull { id -> recipes.get(id)?.let { id to RecipeJson.decodeRecipe(it.json) } }.toMap()
 }

@@ -59,6 +59,8 @@ object AppModule {
     @Provides fun annotationDao(db: MiseDatabase): AnnotationDao = db.annotations()
     @Provides fun viewStateDao(db: MiseDatabase): ViewStateDao = db.viewState()
     @Provides fun sourceTextDao(db: MiseDatabase): SourceTextDao = db.sourceTexts()
+    @Provides fun shoppingDao(db: MiseDatabase): app.mise.data.db.ShoppingDao = db.shopping()
+    @Provides fun feastDao(db: MiseDatabase): app.mise.data.db.FeastDao = db.feasts()
 }
 
 @Module

@@ -35,6 +35,8 @@ data class LibraryUiState(
     val refreshing: Boolean = false,
     val banner: String? = null,
     val source: SourceKind = SourceKind.SAMPLE,
+    /** Recipes picked (long-press) for a shopping list or meal plan, in the order picked. */
+    val picked: List<String> = emptyList(),
 )
 
 @HiltViewModel
@@ -43,10 +45,11 @@ class LibraryViewModel @Inject constructor(
     settings: SettingsStore,
 ) : ViewModel() {
     private val filters = MutableStateFlow(LibraryFilters())
+    private val picked = MutableStateFlow<List<String>>(emptyList())
 
     val state: StateFlow<LibraryUiState> = combine(
-        repository.library(), filters, repository.status, settings.settings,
-    ) { all, f, status, s ->
+        repository.library(), filters, repository.status, settings.settings, picked,
+    ) { all, f, status, s, pick ->
         val docs = all.associateWith { SearchDoc(it.title, it.tags, it.ingredientNames) }
         val filtered = all
             .filter { !f.favoritesOnly || it.favorite }
@@ -68,6 +71,7 @@ class LibraryViewModel @Inject constructor(
             refreshing = status.running,
             banner = bannerFor(status.lastResult, s),
             source = s.effectiveSource,
+            picked = pick.filter { id -> all.any { it.id == id } },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
@@ -80,6 +84,8 @@ class LibraryViewModel @Inject constructor(
     fun toggleTag(tag: String) = filters.update { it.copy(tags = if (tag in it.tags) it.tags - tag else it.tags + tag) }
     fun toggleFavorites() = filters.update { it.copy(favoritesOnly = !it.favoritesOnly) }
     fun clearFilters() = filters.update { LibraryFilters() }
+    fun togglePick(id: String) = picked.update { if (id in it) it - id else it + id }
+    fun clearPicks() = picked.update { emptyList() }
 
     private fun bannerFor(result: SyncResult?, s: Settings): String? {
         val failed = result as? SyncResult.Failed ?: return null

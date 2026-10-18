@@ -46,6 +46,24 @@ class FakeSource(
 
     override suspend fun getSourceText(id: String): String? = "raw text of $id"
 
+    var features = app.mise.data.source.ServerFeatures(canImport = true, canConvert = true)
+    val imports = mutableListOf<String>()
+    /** Statuses handed out for successive importStatus calls. */
+    var importStatuses = ArrayDeque(listOf("converting", "done"))
+
+    override suspend fun features() = features
+
+    override suspend fun importRecipe(text: String, title: String?, source: String?): app.mise.data.source.ImportJob {
+        check()
+        imports += text
+        return app.mise.data.source.ImportJob("job1", "from-phone/x.txt", if (features.canConvert) "queued" else "saved")
+    }
+
+    override suspend fun importStatus(jobId: String): app.mise.data.source.ImportJob? {
+        val status = importStatuses.removeFirstOrNull() ?: "done"
+        return app.mise.data.source.ImportJob(jobId, "from-phone/x.txt", status, recipeId = if (status == "done") "sri-lankan-lamb-curry-for-kothu" else null)
+    }
+
     override suspend fun putAnnotations(id: String, a: Annotations) {
         check()
         if (!capabilities.supportsAnnotations) throw UnsupportedOperationException()

@@ -60,6 +60,10 @@ class MainActivity : ComponentActivity() {
     private fun requestFrom(intent: Intent?): LaunchRequest? {
         intent ?: return null
         intent.getStringExtra(EXTRA_COOK_RECIPE)?.let { return LaunchRequest.Cook(it) }
+        intent.getLongExtra(EXTRA_FEAST, -1).takeIf { it >= 0 }?.let { return LaunchRequest.Meal(it) }
+        if (intent.action == Intent.ACTION_SEND && intent.type?.startsWith("text/") == true) {
+            return LaunchRequest.AddRecipe(intent.getStringExtra(Intent.EXTRA_TEXT), intent.getStringExtra(Intent.EXTRA_SUBJECT))
+        }
         val data = intent.data
         if (intent.action == Intent.ACTION_VIEW && data?.scheme == "mise") return LaunchRequest.Pair(data.toString())
         return null
@@ -67,5 +71,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_COOK_RECIPE = "cook_recipe_id"
+        const val EXTRA_FEAST = "feast_id"
     }
 }

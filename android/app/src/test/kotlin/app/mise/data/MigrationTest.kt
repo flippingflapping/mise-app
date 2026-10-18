@@ -6,6 +6,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.mise.data.db.MIGRATION_1_2
+import app.mise.data.db.MIGRATION_2_3
+import app.mise.data.db.FeastDishEntity
+import app.mise.data.db.FeastEntity
+import app.mise.data.db.ShoppingItemEntity
+import app.mise.data.db.ShoppingListEntity
 import app.mise.data.db.MiseDatabase
 import app.mise.data.db.SourceTextEntity
 import com.google.common.truth.Truth.assertThat
@@ -64,5 +69,39 @@ class MigrationTest {
         } finally {
             room.close()
         }
+    }
+
+    @Test
+    fun migrate2To3AddsPlanningTables() = runTest {
+        helper.createDatabase(dbName, 2).apply {
+            execSQL(
+                "INSERT INTO recipes (id, source_kind, json, title, tags, ingredient_names, status, updated_at, etag, cached_at, image) " +
+                    "VALUES ('r1', 'LAN', '{}', 'Curry', '', '', 'READY', NULL, NULL, 5, NULL)",
+            )
+            close()
+        }
+        helper.runMigrationsAndValidate(dbName, 3, true, MIGRATION_2_3).close()
+        val room = Room.databaseBuilder(ApplicationProvider.getApplicationContext(), MiseDatabase::class.java, dbName)
+            .addMigrations(*MiseDatabase.MIGRATIONS).allowMainThreadQueries().build()
+        try {
+            assertThat(room.recipes().get("r1")?.title).isEqualTo("Curry")
+            val listId = room.shopping().create(
+                ShoppingListEntity(name = "Saturday", createdAt = 1), emptyList(),
+                listOf(ShoppingItemEntity(listId = 0, label = "200 g onion", aisle = "Fruit & veg")),
+            )
+            assertThat(room.shopping().lists().first().single().total).isEqualTo(1)
+            val feastId = room.feasts().create(FeastEntity(name = "Dinner", serveAt = 10, createdAt = 1), listOf(FeastDishEntity(0, "r1", 1.0)))
+            assertThat(room.feasts().dishesNow(feastId).single().recipeId).isEqualTo("r1")
+            room.shopping().deleteList(listId) // cascades to items
+            assertThat(room.shopping().items(listId).first()).isEmpty()
+        } finally {
+            room.close()
+        }
+    }
+
+    @Test
+    fun migrateAllTheWayFromV1() {
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(dbName, 3, true, *MiseDatabase.MIGRATIONS).close()
     }
 }
