@@ -242,6 +242,28 @@ The server listens on TCP port **8765** (change `port` in `config.toml`).
 
 ---
 
+### Finding where the connection breaks
+
+Run these in order with the server running; the first one that fails tells you where to look.
+
+| # | Where | Command | If it fails |
+|---|---|---|---|
+| 1 | On the PC (where the server runs) | `curl http://127.0.0.1:8765/api/v1/health` | The server isn't running, or uses another port. |
+| 2 | Same place | `curl http://192.168.x.x:8765/api/v1/health` (the address in the QR code) | Check `host = "0.0.0.0"` under `[server]` in `config.toml`. |
+| 3 | Windows PowerShell (if the server runs in WSL) | `curl.exe http://192.168.x.x:8765/api/v1/health` | Mirrored networking isn't active: check `.wslconfig`, then `wsl --shutdown`. |
+| 4 | Phone browser | `http://192.168.x.x:8765/api/v1/health` | A firewall, or the phone isn't on the same network (see below). |
+| 5 | Mise → Settings → Test connection | | The message says why: *timed out* ≈ firewall, *refused* ≈ nothing listening on that port, *no route* ≈ different network. |
+
+If 1–3 work but 4 fails:
+* **Server in WSL:** the normal Windows firewall prompt doesn't cover WSL; mirrored WSL traffic goes
+  through the **Hyper-V firewall**. Run the `New-NetFirewallHyperVRule` command from
+  [Running inside WSL](#running-inside-wsl) in an *administrator* PowerShell, and check it exists with
+  `Get-NetFirewallHyperVRule -Name MiseServer`.
+* `Get-NetConnectionProfile` should show your Wi-Fi as **Private**, not Public.
+* On the phone: turn off mobile data and any VPN, and make sure it's on the same Wi-Fi as the PC, not
+  a guest network. Many routers block devices from talking to each other on guest networks
+  ("AP/client isolation").
+
 ## For developers
 
 ```

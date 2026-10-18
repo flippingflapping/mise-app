@@ -116,11 +116,8 @@ class LanServerSource(
         block()
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e
-    } catch (e: IOException) {
-        throw SourceException(SourceException.Reason.UNREACHABLE, "Can't reach your PC", e)
     } catch (e: Exception) {
-        // Unresolvable host, malformed URL, timeouts that aren't IOExceptions, …
-        throw SourceException(SourceException.Reason.UNREACHABLE, "Can't reach your PC (${e.javaClass.simpleName})", e)
+        throw SourceException(SourceException.Reason.UNREACHABLE, unreachableMessage(e), e)
     }
 
     private fun ensureOk(resp: HttpResponse) {
@@ -140,5 +137,26 @@ class LanServerSource(
         throw SourceException(SourceException.Reason.BAD_DATA, "The PC sent data this app can't read", e)
     } catch (e: IllegalArgumentException) {
         throw SourceException(SourceException.Reason.BAD_DATA, "The PC sent data this app can't read", e)
+    }
+
+    companion object {
+        /** "Can't reach your PC" plus the most likely cause, judged from the exception chain. */
+        fun unreachableMessage(e: Throwable): String {
+            val chain = generateSequence(e) { it.cause }.take(8).toList()
+            val names = chain.map { it.javaClass.simpleName }
+            val why = when {
+                names.any { "Timeout" in it } || chain.any { it is java.net.SocketTimeoutException } ->
+                    "the connection timed out. That's usually a firewall on the PC (with WSL: the Hyper-V firewall), " +
+                        "or the phone is on a different network"
+                chain.any { it is java.net.ConnectException && it.message.orEmpty().contains("refused", ignoreCase = true) } ->
+                    "the PC refused the connection. Is the Mise server running, on this port?"
+                chain.any { it is java.net.NoRouteToHostException } ->
+                    "no route to that address. Is the phone on the same Wi-Fi as the PC?"
+                chain.any { it is java.net.UnknownHostException } -> "that server name couldn't be found"
+                chain.any { it is IOException } -> null
+                else -> e.javaClass.simpleName
+            }
+            return if (why == null) "Can't reach your PC" else "Can't reach your PC — $why"
+        }
     }
 }

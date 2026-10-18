@@ -80,6 +80,14 @@ class LanServerSourceTest {
         assertThat(missing.getSourceText("x")).isNull()
     }
 
+    @Test fun unreachableMessagesNameTheLikelyCause() {
+        fun msg(e: Throwable) = LanServerSource.unreachableMessage(e)
+        assertThat(msg(java.net.SocketTimeoutException("connect timed out"))).contains("firewall")
+        assertThat(msg(IOException("wrapped", java.net.ConnectException("Connection refused")))).contains("refused")
+        assertThat(msg(java.net.NoRouteToHostException())).contains("same Wi-Fi")
+        assertThat(msg(IOException("x"))).isEqualTo("Can't reach your PC")
+    }
+
     @Test fun testConnectionChecksHealthAndToken() = runTest {
         val s = source { req ->
             if (req.url.encodedPath.endsWith("/health")) respond("""{"status":"ok","version":"0.1.0","schema_version":1}""", HttpStatusCode.OK, json)
