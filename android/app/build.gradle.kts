@@ -15,9 +15,22 @@ android {
         applicationId = "app.mise"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
+        // CI builds count up (GitHub run number) so each downloaded APK is a newer version.
+        versionCode = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull() ?: 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        // A fixed key for debug builds, committed on purpose: otherwise every machine (and every CI
+        // run) signs with its own random key and Android refuses to install updates over the old app
+        // ("App not installed"). It's a debug key for a personal, sideloaded app — not a secret.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

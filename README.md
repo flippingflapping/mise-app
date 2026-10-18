@@ -68,6 +68,11 @@ You need: a PC (Windows, macOS or Linux) and an Android phone (Android 8 or newe
    No camera handy? Tap *Enter manually* and type the address and token the server printed.
 4. Pull down on the recipe list to sync. Done.
 
+**Updating the app later:** download the newer `mise-debug-apk` and install it over the old one.
+Your settings, notes and cached recipes stay. (Builds are all signed with the same key, which lives in
+`android/app/debug.keystore`. If Android ever says *"App not installed"* when updating, the
+installed copy was signed with a different key: uninstall Mise once, then install the new APK.)
+
 Until you pair, the app shows a built-in demo recipe (the Sri Lankan lamb curry), so you can try
 everything straight away.
 
