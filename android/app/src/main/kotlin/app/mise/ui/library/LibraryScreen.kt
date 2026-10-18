@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -52,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.mise.core.model.RecipeStatus
 import app.mise.data.repo.LibraryItem
 import app.mise.data.settings.SourceKind
+import app.mise.ui.LocalNetworkPermission
 import app.mise.ui.components.EmptyState
 import app.mise.ui.components.StatusBanner
 
@@ -114,7 +116,20 @@ fun LibraryScreen(
                         }
                     }
                 }
-                state.banner?.let { b -> item(key = "banner") { StatusBanner(b, Modifier.padding(16.dp, 8.dp)) } }
+                state.banner?.let { b ->
+                    item(key = "banner") {
+                        val context = LocalContext.current
+                        val permissionMissing = state.source == SourceKind.LAN && LocalNetworkPermission.needed(context)
+                        StatusBanner(
+                            if (permissionMissing) "$b. ${LocalNetworkPermission.EXPLANATION}" else b,
+                            Modifier.padding(16.dp, 8.dp).then(
+                                if (permissionMissing) Modifier.clickable {
+                                    context.startActivity(LocalNetworkPermission.appSettingsIntent(context))
+                                } else Modifier,
+                            ),
+                        )
+                    }
+                }
                 if (state.source == SourceKind.SAMPLE && !state.loading) item(key = "demo") {
                     StatusBanner(
                         "This is the built-in demo recipe. Pair with your PC in Settings to see your own library.",

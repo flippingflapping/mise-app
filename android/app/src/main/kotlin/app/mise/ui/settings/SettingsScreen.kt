@@ -64,6 +64,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.mise.BuildConfig
+import app.mise.ui.LocalNetworkPermission
+import app.mise.ui.rememberLocalNetworkGate
 import app.mise.core.units.UnitMode
 import app.mise.data.settings.SourceKind
 import app.mise.data.settings.ThemeMode
@@ -84,6 +86,9 @@ fun SettingsScreen(viewModel: SettingsViewModel, pairingLink: String?, onBack: (
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     fun toast(msg: String) = scope.launch { snackbar.showSnackbar(msg) }
+
+    var localNetworkDenied by remember { mutableStateOf(false) }
+    val gate = rememberLocalNetworkGate(onDenied = { localNetworkDenied = true })
 
     LaunchedEffect(pairingLink) {
         if (pairingLink != null && !viewModel.offerPairing(pairingLink)) toast("That pairing link isn't valid.")
@@ -139,7 +144,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, pairingLink: String?, onBack: (
                     serverUrl = s.serverUrl,
                     token = s.token,
                     onScan = ::scan,
-                    onSave = { url, token -> viewModel.saveServer(url, token)?.let { toast(it) } },
+                    onSave = { url, token -> gate { viewModel.saveServer(url, token)?.let { toast(it) } } },
                 )
                 SourceKind.FOLDER -> Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -171,10 +176,10 @@ fun SettingsScreen(viewModel: SettingsViewModel, pairingLink: String?, onBack: (
 
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { viewModel.testConnection() }, enabled = check != ConnectionCheck.Running) {
+                    OutlinedButton(onClick = { gate { viewModel.testConnection() } }, enabled = check != ConnectionCheck.Running) {
                         Text("Test connection")
                     }
-                    OutlinedButton(onClick = { viewModel.syncNow() }, enabled = !sync.running) {
+                    OutlinedButton(onClick = { gate { viewModel.syncNow() } }, enabled = !sync.running) {
                         Text(if (sync.running) "Syncing…" else "Sync now")
                     }
                 }
@@ -183,6 +188,12 @@ fun SettingsScreen(viewModel: SettingsViewModel, pairingLink: String?, onBack: (
                     is ConnectionCheck.Ok -> Text("✓ ${c.message}", color = MaterialTheme.colorScheme.primary)
                     is ConnectionCheck.Failed -> {
                         Text("✗ ${c.message}", color = MaterialTheme.colorScheme.error)
+                        if (s.sourceKind == SourceKind.LAN && (localNetworkDenied || LocalNetworkPermission.needed(context))) {
+                            Text(LocalNetworkPermission.EXPLANATION, style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = { context.startActivity(LocalNetworkPermission.appSettingsIntent(context)) }) {
+                                Text("Open app settings")
+                            }
+                        }
                         if (s.sourceKind == SourceKind.LAN && c.message.startsWith("Can't reach")) {
                             Text(
                                 "Check that the phone is on the same Wi-Fi, and that the address is your PC's Wi-Fi/Ethernet " +
@@ -249,7 +260,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, pairingLink: String?, onBack: (
             onDismissRequest = viewModel::cancelPairing,
             title = { Text("Pair with this PC?") },
             text = { Text("Mise will load recipes from ${info.serverUrl}.") },
-            confirmButton = { TextButton(onClick = viewModel::confirmPairing) { Text("Pair") } },
+            confirmButton = { TextButton(onClick = { gate { viewModel.confirmPairing() } }) { Text("Pair") } },
             dismissButton = { TextButton(onClick = viewModel::cancelPairing) { Text("Cancel") } },
         )
     }

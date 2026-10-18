@@ -301,3 +301,9 @@ picked the default-route interface, which on Windows with WSL/Hyper-V (or Docker
 adapter. It now enumerates adapters by name (`ifaddr`), ranks real Wi-Fi/Ethernet and 192.168/10.x
 first, flags virtual adapters, prints every address with its adapter name, shows a QR per address on
 the localhost pairing page, and accepts an override (`--advertise` / `server.advertise_host`).
+
+**Fix: Android 17 local network protection.** Targeting API 37 means LAN connections are blocked
+(they time out) unless the user grants `ACCESS_LOCAL_NETWORK` ("Nearby devices", runtime). The app
+now declares it, asks on launch when the PC server is the source and before pairing / test / sync,
+and explains the permission (with a link to App info) when it's missing. Found on a real device:
+the phone's browser reached the server but the app timed out.

@@ -5,11 +5,18 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import app.mise.data.repo.RecipeRepository
 import app.mise.data.settings.Settings
+import app.mise.data.settings.SourceKind
+import app.mise.ui.LocalNetworkPermission
+import app.mise.ui.rememberLocalNetworkGate
+import kotlinx.coroutines.launch
 import app.mise.data.settings.SettingsRepository
 import app.mise.ui.LaunchRequest
 import app.mise.ui.MiseNavHost
@@ -20,6 +27,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var repository: RecipeRepository
 
     private var launch by mutableStateOf<LaunchRequest?>(null)
 
@@ -30,6 +38,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             val settings by settingsRepository.settings.collectAsStateWithLifecycle(Settings())
             MiseTheme(settings.theme, settings.textScale) {
+                // Android 17+: ask for local network access up front when the PC server is the source,
+                // then sync (the first sync attempt would have timed out without it).
+                val gate = rememberLocalNetworkGate()
+                val usesPc = settings.effectiveSource == SourceKind.LAN
+                LaunchedEffect(usesPc) {
+                    if (usesPc && LocalNetworkPermission.needed(this@MainActivity)) {
+                        gate { lifecycleScope.launch { repository.sync() } }
+                    }
+                }
                 MiseNavHost(launch, onLaunchHandled = { launch = null })
             }
         }
