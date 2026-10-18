@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.mise.data.db.MIGRATION_1_2
 import app.mise.data.db.MIGRATION_2_3
+import app.mise.data.db.MIGRATION_3_4
 import app.mise.data.db.FeastDishEntity
 import app.mise.data.db.FeastEntity
 import app.mise.data.db.ShoppingItemEntity
@@ -100,8 +101,26 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate3To4KeepsPlansAsCalm() = runTest {
+        helper.createDatabase(dbName, 3).apply {
+            execSQL("INSERT INTO feasts (id, name, serve_at, created_at, remind) VALUES (1, 'Dinner', 10, 1, 1)")
+            close()
+        }
+        helper.runMigrationsAndValidate(dbName, 4, true, MIGRATION_3_4).close()
+        val room = Room.databaseBuilder(ApplicationProvider.getApplicationContext(), MiseDatabase::class.java, dbName)
+            .addMigrations(*MiseDatabase.MIGRATIONS).allowMainThreadQueries().build()
+        try {
+            assertThat(room.feasts().get(1)?.style).isEqualTo("CALM")
+            room.feasts().setStyle(1, "PRO")
+            assertThat(room.feasts().lastStyle()).isEqualTo("PRO")
+        } finally {
+            room.close()
+        }
+    }
+
+    @Test
     fun migrateAllTheWayFromV1() {
         helper.createDatabase(dbName, 1).close()
-        helper.runMigrationsAndValidate(dbName, 3, true, *MiseDatabase.MIGRATIONS).close()
+        helper.runMigrationsAndValidate(dbName, 4, true, *MiseDatabase.MIGRATIONS).close()
     }
 }

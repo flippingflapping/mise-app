@@ -199,6 +199,14 @@ class PlansScreensTest {
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Eat!"))
         compose.onNodeWithText("Free time").assertExists()
         screenshot("meal-plan-later")
+        // Pro: no separate prep block, exact times on each step, and the plan remembers it.
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Pro"))
+        compose.onNodeWithText("Pro").performClick()
+        compose.waitUntil(10_000) { runBlocking { plans.feast(feastId).first()!!.style == app.mise.core.feast.FeastStyle.PRO } }
+        waitFor("Prep each dish while others cook", substring = true)
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("The plan"))
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Prep everything").fetchSemanticsNodes().isEmpty() }
+        screenshot("meal-plan-pro")
     }
 
     @Test fun mealPlanInProgressWithLateness() {

@@ -337,3 +337,9 @@ Inside a block: an ordered checklist with no clock times. The first block with a
 "Now" card; others are one line each. "Running late" only appears from 10 minutes, rounded to 5,
 and pushing dinner back lands on a round 5 minutes. Reminders fire per block, not per step. The
 scheduler underneath is unchanged apart from prep moving to the front.
+
+**Calm / Pro style per meal plan.** Calm = prep-first blocks above. Pro = the original
+time-efficient schedule (each dish's mise en place scheduled like a step, right before the dish, so it
+can fill other dishes' hands-off time), still shown as blocks but with exact times on each step and
+no separate prep block. Stored per plan (Room v4, `feasts.style`, default CALM); new plans default to
+the style of the most recently created plan, so no extra setting.

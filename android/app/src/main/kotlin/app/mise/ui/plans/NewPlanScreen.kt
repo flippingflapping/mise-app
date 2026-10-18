@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import app.mise.core.feast.FeastStyle
 import app.mise.core.model.Recipe
 import app.mise.core.scale.Servings
 import app.mise.data.repo.Pick
@@ -83,6 +84,7 @@ data class NewPlanState(
     val servings: Map<String, Double> = emptyMap(),
     val name: String = "",
     val serveAt: Long = 0,
+    val style: FeastStyle = FeastStyle.CALM,
 )
 
 @HiltViewModel(assistedFactory = NewPlanViewModel.Factory::class)
@@ -117,6 +119,7 @@ class NewPlanViewModel @AssistedInject constructor(
                 servings = list.associate { it.id to it.recipeYield.baseServings },
                 name = if (kind == PlanKind.SHOPPING) "Shopping · $day" else "Dinner · $day",
                 serveAt = serve.toInstant().toEpochMilli(),
+                style = if (kind == PlanKind.MEAL) plans.defaultStyle() else FeastStyle.CALM,
             )
         }
     }
@@ -125,6 +128,7 @@ class NewPlanViewModel @AssistedInject constructor(
     fun increment(id: String) = _state.update { s -> s.copy(servings = s.servings + (id to Servings.increment(s.servings[id] ?: 1.0))) }
     fun decrement(id: String) = _state.update { s -> s.copy(servings = s.servings + (id to Servings.decrement(s.servings[id] ?: 1.0))) }
     fun setServeAt(millis: Long) = _state.update { it.copy(serveAt = millis) }
+    fun setStyle(style: FeastStyle) = _state.update { it.copy(style = style) }
 
     /** Creates the list / plan and hands its id to [onCreated]. */
     fun create(onCreated: (Long) -> Unit) = viewModelScope.launch {
@@ -132,7 +136,7 @@ class NewPlanViewModel @AssistedInject constructor(
         val picks = s.recipes.map { Pick(it.id, s.servings[it.id] ?: it.recipeYield.baseServings) }
         val id = when (kind) {
             PlanKind.SHOPPING -> plans.createShoppingList(s.name, picks, settings.settings.first().defaultUnitMode)
-            PlanKind.MEAL -> plans.createFeast(s.name, s.serveAt, picks)
+            PlanKind.MEAL -> plans.createFeast(s.name, s.serveAt, picks, s.style)
         }
         onCreated(id)
     }
@@ -189,6 +193,12 @@ fun NewPlanScreen(viewModel: NewPlanViewModel, onBack: () -> Unit, onCreated: (L
                         "Mise works backwards from this time so every dish is ready together, with one cook.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                }
+            }
+            if (meal) item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("How do you like to cook?", style = MaterialTheme.typography.titleMedium)
+                    StyleChooser(state.style, viewModel::setStyle)
                 }
             }
             item { Text("Servings", style = MaterialTheme.typography.titleMedium) }

@@ -4,6 +4,8 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.mise.TestFixtures
+import app.mise.core.feast.FeastBlock
+import app.mise.core.feast.FeastStyle
 import app.mise.core.units.UnitMode
 import app.mise.data.db.MiseDatabase
 import app.mise.data.repo.Pick
@@ -70,6 +72,16 @@ class PlansRepositoryTest {
         assertThat(plans.shoppingLists().first().single().done).isEqualTo(1)
         plans.deleteList(listId)
         assertThat(plans.shoppingLists().first()).isEmpty()
+    }
+
+    @Test fun newPlansStartInTheLastStyleUsed() = runTest {
+        assertThat(plans.defaultStyle()).isEqualTo(FeastStyle.CALM)
+        val feastId = plans.createFeast("Dinner", serve, listOf(Pick(id, 4.0)), FeastStyle.PRO)
+        assertThat(plans.feast(feastId).first()!!.plan.style).isEqualTo(FeastStyle.PRO)
+        assertThat(plans.defaultStyle()).isEqualTo(FeastStyle.PRO)
+        plans.setStyle(feastId, FeastStyle.CALM)
+        assertThat(plans.feast(feastId).first()!!.plan.blocks.first().kind).isEqualTo(FeastBlock.Kind.PREP)
+        assertThat(plans.defaultStyle()).isEqualTo(FeastStyle.CALM)
     }
 
     @Test fun feastPlansAndTicksOff() = runTest {

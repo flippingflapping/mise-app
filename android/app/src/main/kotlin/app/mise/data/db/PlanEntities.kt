@@ -57,8 +57,10 @@ data class FeastEntity(
     val name: String,
     @ColumnInfo(name = "serve_at") val serveAt: Long,
     @ColumnInfo(name = "created_at") val createdAt: Long,
-    /** Notify at the start of each task. */
+    /** Notify at the start of each block. */
     val remind: Boolean = true,
+    /** A [app.mise.core.feast.FeastStyle] name: CALM (prep first) or PRO (multitask). */
+    @ColumnInfo(defaultValue = "CALM") val style: String = "CALM",
 )
 
 @Entity(
@@ -193,6 +195,13 @@ interface FeastDao {
 
     @Query("UPDATE feasts SET remind = :remind WHERE id = :id")
     suspend fun setRemind(id: Long, remind: Boolean)
+
+    @Query("UPDATE feasts SET style = :style WHERE id = :id")
+    suspend fun setStyle(id: Long, style: String)
+
+    /** The style of the most recently made plan: new plans start with it. */
+    @Query("SELECT style FROM feasts ORDER BY created_at DESC, id DESC LIMIT 1")
+    suspend fun lastStyle(): String?
 
     @Query("DELETE FROM feasts WHERE id = :id")
     suspend fun delete(id: Long)

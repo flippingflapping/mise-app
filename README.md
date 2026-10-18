@@ -156,9 +156,15 @@ Either way the phone never sees the API key. Adding recipes needs the PC server 
   | **about 7:00** | Bring it all together · about 45 min |
   | **7:45** | Eat! |
 
-  All the chopping and measuring comes first, in one go. Inside a block there are no clock times,
-  just a checklist in order (with timer buttons where a step has one). Only the block you're on is
-  open; later ones are one line each (tap to peek). Overnight marinades and the like go under
+  Pick how you like to cook (you can switch any time on the plan, and new plans remember your choice):
+
+  * **Calm** (the example above): all the chopping and measuring comes first, in one go. Takes a
+    little longer, much less juggling. Inside a block there are no clock times,
+    just a checklist in order (with timer buttons where a step has one).
+  * **Pro**: each dish is prepped just before it's needed, filling the time while other things
+    simmer. Fastest, more multitasking, and every step shows its exact time.
+
+  Only the block you're on is open; later ones are one line each (tap to peek). Overnight marinades and the like go under
   **Ahead of time**. If you fall behind by 10 minutes or more it says so and offers to push dinner
   back. Optional reminders notify you when each block starts. Plans live under 🕒 in the top bar.
 

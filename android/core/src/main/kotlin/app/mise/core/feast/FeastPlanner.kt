@@ -11,6 +11,14 @@ import kotlin.math.ceil
 import kotlin.math.max
 
 
+/** How to lay out the cooking. */
+enum class FeastStyle {
+    /** All the prep first, then cook. A bit longer, much less juggling. */
+    CALM,
+    /** Prep each dish just before it's needed, filling simmering gaps. Fastest; more multitasking. */
+    PRO,
+}
+
 /** A dish in a feast, at a chosen scale. */
 data class FeastDish(val recipe: Recipe, val factor: Double = 1.0)
 
@@ -57,7 +65,7 @@ data class AdvanceTask(
  */
 data class FeastBlock(
     val kind: Kind,
-    /** Rounded down to 5 minutes (the very first block to 15). */
+    /** Rounded down to 5 minutes (in calm style, the very first block to 15). */
     val startMillis: Long,
     /** The next block's start, or serve time. */
     val endMillis: Long,
@@ -89,9 +97,10 @@ data class FeastPlan(
     val advance: List<AdvanceTask>,
     /** Remaining (not done) tasks, by start time. */
     val tasks: List<FeastTask>,
+    val style: FeastStyle = FeastStyle.CALM,
 ) {
     /** The tasks grouped into a few blocks of time. */
-    val blocks: List<FeastBlock> by lazy { FeastPlanner.blocks(tasks, serveAtMillis) }
+    val blocks: List<FeastBlock> by lazy { FeastPlanner.blocks(tasks, serveAtMillis, style) }
 
     /** When to start, as shown: the first block's (rounded) start. */
     val startAtMillis: Long get() = blocks.firstOrNull()?.startMillis ?: serveAtMillis
@@ -113,8 +122,9 @@ data class FeastPlan(
 /**
  * Plans a multi-dish meal for one cook, working backwards from the serve time.
  *
- * * All the mise en place (prepping each dish's ingredients) comes first, in one go, then the
- *   cooking. Simpler to follow than prepping dish by dish between other jobs.
+ * * [FeastStyle.CALM]: all the mise en place (prepping each dish's ingredients) comes first, in
+ *   one go, then the cooking. [FeastStyle.PRO]: each dish's prep is scheduled like a step, just
+ *   before that dish, so it can fill another dish's simmering time.
  * * Durations: a timed step takes the middle of its range; untimed steps get a short estimate from
  *   their length and the number of ingredients they add. Steps of 5 minutes or more are mostly
  *   hands-off: the cook is busy for the first 2 minutes, then free (that's when other dishes' work
@@ -135,7 +145,12 @@ object FeastPlanner {
     /** Don't call it "behind" for less than this. */
     const val LATE_AFTER_MIN = 10
 
-    fun plan(dishes: List<FeastDish>, serveAtMillis: Long, done: Set<String> = emptySet()): FeastPlan {
+    fun plan(
+        dishes: List<FeastDish>,
+        serveAtMillis: Long,
+        done: Set<String> = emptySet(),
+        style: FeastStyle = FeastStyle.CALM,
+    ): FeastPlan {
         data class Draft(
             val id: String, val dish: FeastDish, val title: String, val step: Step?, val kind: FeastTask.Kind,
             val duration: Long, val active: Long, val timer: TimerSpec?, val prepList: List<String>,
@@ -157,10 +172,11 @@ object FeastPlanner {
             if (toPrep.isNotEmpty()) {
                 val minutes = toPrep.sumOf { if (it.prep.isNullOrBlank()) 0.5 else 1.5 }.coerceIn(3.0, 30.0)
                 val ms = roundToHalfMinute(minutes)
-                mise += Draft(
+                val prepDraft = Draft(
                     "${r.id}/mise", dish, "Mise en place", null, FeastTask.Kind.MISE_EN_PLACE, ms, ms, null,
                     toPrep.filter { !it.prep.isNullOrBlank() }.map { "${ShoppingList.displayName(it.name)}: ${it.prep}" },
                 )
+                if (style == FeastStyle.PRO) chain += prepDraft else mise += prepDraft
             }
             for (s in timelineSteps) {
                 val timing = StepTimers.timing(s, r) as? StepTiming.Countdown
@@ -204,7 +220,7 @@ object FeastPlanner {
             )
         }
 
-        // Then all the prep, back to back, finishing when the cooking starts (first-cooked dish last).
+        // Calm: then all the prep, back to back, finishing when the cooking starts (first-cooked dish last).
         val cookStart = placed.minOfOrNull { it.startMillis } ?: serveAtMillis
         val firstCook = placed.groupBy { it.recipeId }.mapValues { (_, t) -> t.minOf { it.startMillis } }
         var t = cookStart
@@ -227,24 +243,26 @@ object FeastPlanner {
             AdvanceTask("${r.id}/${s.id}", r.id, r.title, s.title, s.id, r.advancePrep, roundDown(begin - waitMs, 15), overnight)
         }.sortedBy { it.byMillis }
 
-        return FeastPlan(serveAtMillis, advance, placed.sortedWith(compareBy({ it.startMillis }, { it.recipeTitle })))
+        return FeastPlan(serveAtMillis, advance, placed.sortedWith(compareBy({ it.startMillis }, { it.recipeTitle })), style)
     }
 
     /**
-     * Groups tasks into blocks: one prep block, then cooking split where the cook has a real break,
+     * Groups tasks into blocks: one prep block (calm style; in pro style each dish's prep is just
+     * part of its cooking), then cooking split where the cook has a real break,
      * and within that by dish (short stretches of a dish join their neighbour, so "juggling" several
      * dishes reads as one block). Start times are rounded down so they're easy to read.
      */
-    fun blocks(tasks: List<FeastTask>, serveAtMillis: Long): List<FeastBlock> {
+    fun blocks(tasks: List<FeastTask>, serveAtMillis: Long, style: FeastStyle = FeastStyle.CALM): List<FeastBlock> {
         if (tasks.isEmpty()) return emptyList()
         data class Raw(val kind: FeastBlock.Kind, val start: Long, val tasks: List<FeastTask>)
 
         val raw = mutableListOf<Raw>() // the prep block, if any
-        val prep = tasks.filter { it.kind == FeastTask.Kind.MISE_EN_PLACE }.sortedBy { it.startMillis }
+        val upFront = style == FeastStyle.CALM
+        val prep = if (upFront) tasks.filter { it.kind == FeastTask.Kind.MISE_EN_PLACE }.sortedBy { it.startMillis } else emptyList()
         if (prep.isNotEmpty()) raw += Raw(FeastBlock.Kind.PREP, prep.first().startMillis, prep)
 
         // Split the cooking into sessions at gaps where the cook is free for a while.
-        val cooking = tasks.filter { it.kind == FeastTask.Kind.STEP }.sortedBy { it.startMillis }
+        val cooking = tasks.filter { !upFront || it.kind == FeastTask.Kind.STEP }.sortedBy { it.startMillis }
         var busyUntil = prep.maxOfOrNull { it.startMillis + it.activeMillis }
         val sessions = mutableListOf<MutableList<FeastTask>>()
         val breaks = mutableListOf<Raw>() // breaks[i] comes before sessions[i + 1]
@@ -267,7 +285,10 @@ object FeastPlanner {
         }
 
         // Round the starts; drop blocks that collapse into the next one.
-        val rounded = ordered.mapIndexed { i, r -> r to roundDown(r.start, if (i == 0) 15 else 5) }
+        // Work rounds down (start a little early); free time rounds up (never before the work ends).
+        val rounded = ordered.mapIndexed { i, r ->
+            r to if (r.kind == FeastBlock.Kind.BREAK) roundDown(r.start + 5 * MINUTE - 1, 5) else roundDown(r.start, if (i == 0 && upFront) 15 else 5)
+        }
         val kept = mutableListOf<Pair<Raw, Long>>()
         for ((r, start) in rounded) {
             val prev = kept.lastOrNull()

@@ -3,6 +3,7 @@ package app.mise.data.repo
 import app.mise.core.feast.FeastDish
 import app.mise.core.feast.FeastPlan
 import app.mise.core.feast.FeastPlanner
+import app.mise.core.feast.FeastStyle
 import app.mise.core.model.Recipe
 import app.mise.core.shopping.ShoppingLine
 import app.mise.core.shopping.ShoppingList
@@ -52,9 +53,13 @@ data class FeastDetail(
     /** Dishes whose recipe is no longer in the library. */
     val missing: List<String>,
 ) {
+    val style: FeastStyle get() = feast.feastStyle
+
     val plan: FeastPlan
-        get() = FeastPlanner.plan(dishes.map { (r, f) -> FeastDish(r, f) }, feast.serveAt, done)
+        get() = FeastPlanner.plan(dishes.map { (r, f) -> FeastDish(r, f) }, feast.serveAt, done, style)
 }
+
+val FeastEntity.feastStyle: FeastStyle get() = runCatching { FeastStyle.valueOf(style) }.getOrDefault(FeastStyle.CALM)
 
 /** Shopping lists and feast plans. Stored on the phone only. */
 @Singleton
@@ -126,10 +131,10 @@ class PlansRepository @Inject constructor(
                 }
             }
 
-    suspend fun createFeast(name: String, serveAt: Long, picks: List<Pick>): Long {
+    suspend fun createFeast(name: String, serveAt: Long, picks: List<Pick>, style: FeastStyle = FeastStyle.CALM): Long {
         val byId = recipes.recipesById(picks.map { it.recipeId })
         return feasts.create(
-            FeastEntity(name = name.ifBlank { "Feast" }, serveAt = serveAt, createdAt = clock.now()),
+            FeastEntity(name = name.ifBlank { "Feast" }, serveAt = serveAt, createdAt = clock.now(), style = style.name),
             picks.mapIndexedNotNull { i, p -> byId[p.recipeId]?.let { FeastDishEntity(0, it.id, p.servings / it.recipeYield.baseServings, i) } },
         )
     }
@@ -139,6 +144,11 @@ class PlansRepository @Inject constructor(
 
     suspend fun setServeAt(feastId: Long, serveAt: Long) = feasts.setServeAt(feastId, serveAt)
     suspend fun setRemind(feastId: Long, remind: Boolean) = feasts.setRemind(feastId, remind)
+    suspend fun setStyle(feastId: Long, style: FeastStyle) = feasts.setStyle(feastId, style.name)
+
+    /** New meal plans start in the style you used last (calm the first time). */
+    suspend fun defaultStyle(): FeastStyle =
+        feasts.lastStyle()?.let { runCatching { FeastStyle.valueOf(it) }.getOrNull() } ?: FeastStyle.CALM
     suspend fun deleteFeast(feastId: Long) = feasts.delete(feastId)
 
     /** The current plan for reminders (computed outside of any UI). */
@@ -147,7 +157,7 @@ class PlansRepository @Inject constructor(
         val dishes = feasts.dishesNow(feastId)
         val byId = recipes.recipesById(dishes.map { it.recipeId })
         val plan = FeastPlanner.plan(
-            dishes.mapNotNull { d -> byId[d.recipeId]?.let { FeastDish(it, d.factor) } }, f.serveAt, feasts.doneNow(feastId).toSet(),
+            dishes.mapNotNull { d -> byId[d.recipeId]?.let { FeastDish(it, d.factor) } }, f.serveAt, feasts.doneNow(feastId).toSet(), f.feastStyle,
         )
         return f to plan
     }

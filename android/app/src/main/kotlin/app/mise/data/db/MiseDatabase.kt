@@ -11,7 +11,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ShoppingListEntity::class, ShoppingListRecipeEntity::class, ShoppingItemEntity::class,
         FeastEntity::class, FeastDishEntity::class, FeastDoneEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class MiseDatabase : RoomDatabase() {
@@ -24,7 +24,7 @@ abstract class MiseDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "mise.db"
-        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
     }
 }
 
@@ -49,5 +49,12 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         db.execSQL("CREATE TABLE IF NOT EXISTS `feasts` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `serve_at` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `remind` INTEGER NOT NULL)")
         db.execSQL("CREATE TABLE IF NOT EXISTS `feast_dishes` (`feast_id` INTEGER NOT NULL, `recipe_id` TEXT NOT NULL, `factor` REAL NOT NULL, `position` INTEGER NOT NULL, PRIMARY KEY(`feast_id`, `recipe_id`), FOREIGN KEY(`feast_id`) REFERENCES `feasts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
         db.execSQL("CREATE TABLE IF NOT EXISTS `feast_done` (`feast_id` INTEGER NOT NULL, `task_id` TEXT NOT NULL, PRIMARY KEY(`feast_id`, `task_id`), FOREIGN KEY(`feast_id`) REFERENCES `feasts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+    }
+}
+
+/** v4: meal plans remember calm (prep first) or pro (multitask) style. */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE feasts ADD COLUMN style TEXT NOT NULL DEFAULT 'CALM'")
     }
 }

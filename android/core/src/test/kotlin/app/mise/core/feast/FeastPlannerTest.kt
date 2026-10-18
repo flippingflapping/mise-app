@@ -109,12 +109,16 @@ class FeastPlannerTest {
     /** Blocks tile the evening with a few round times, and every task appears exactly once. */
     private fun assertTidyBlocks(plan: FeastPlan) {
         val blocks = plan.blocks
-        assertThat(blocks.first().startMillis % (15 * min)).isEqualTo(0)
+        if (plan.style == FeastStyle.CALM) assertThat(blocks.first().startMillis % (15 * min)).isEqualTo(0)
         blocks.forEach { assertThat(it.startMillis % (5 * min)).isEqualTo(0) }
         blocks.zipWithNext().forEach { (a, b) -> assertThat(a.endMillis).isEqualTo(b.startMillis) }
         assertThat(blocks.last().endMillis).isEqualTo(serve)
         assertThat(blocks.flatMap { it.tasks }.map { it.id }).containsExactlyElementsIn(plan.tasks.map { it.id })
         blocks.forEach { b -> assertThat(b.startMillis).isAtMost(b.tasks.minOfOrNull { it.startMillis } ?: b.startMillis) }
+        // free time never starts before the hands-on work before it is finished
+        blocks.zipWithNext().filter { it.second.kind == FeastBlock.Kind.BREAK }.forEach { (work, free) ->
+            assertThat(free.startMillis).isAtLeast(work.tasks.maxOf { it.startMillis + it.activeMillis })
+        }
     }
 
     @Test fun prepComesFirstAsOneBlock() {
@@ -154,5 +158,25 @@ class FeastPlannerTest {
         assertThat(b(68)).isEqualTo(75)
         assertThat(b(97)).isEqualTo(90)
         assertThat(b(100)).isEqualTo(105)
+    }
+
+    @Test fun proStyleMultitasksAndIsNoSlower() {
+        val dishes = listOf(FeastDish(curry), FeastDish(stew), FeastDish(rice))
+        val calm = FeastPlanner.plan(dishes, serve)
+        val pro = FeastPlanner.plan(dishes, serve, style = FeastStyle.PRO)
+        assertThat(pro.style).isEqualTo(FeastStyle.PRO)
+        assertNoOverlap(pro)
+        assertTidyBlocks(pro)
+        // No separate prep block: each dish's prep is part of its own cooking block, before its steps.
+        assertThat(pro.blocks.map { it.kind }).doesNotContain(FeastBlock.Kind.PREP)
+        for (d in dishes) {
+            val mine = pro.tasks.filter { it.recipeId == d.recipe.id }
+            assertThat(mine.first().kind).isEqualTo(FeastTask.Kind.MISE_EN_PLACE)
+        }
+        // Prep fills gaps, so the evening starts no earlier than calm style (usually later).
+        val firstStart = { p: FeastPlan -> p.tasks.minOf { it.startMillis } }
+        assertThat(firstStart(pro)).isAtLeast(firstStart(calm))
+        // Same work either way.
+        assertThat(pro.tasks.map { it.id }).containsExactlyElementsIn(calm.tasks.map { it.id })
     }
 }

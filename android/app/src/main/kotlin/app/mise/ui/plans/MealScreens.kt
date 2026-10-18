@@ -39,6 +39,9 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,6 +66,7 @@ import app.mise.core.feast.AdvanceTask
 import app.mise.core.feast.FeastBlock
 import app.mise.core.feast.FeastDish
 import app.mise.core.feast.FeastPlanner
+import app.mise.core.feast.FeastStyle
 import app.mise.core.feast.FeastTask
 import app.mise.core.timer.StepTimers
 import app.mise.data.db.FeastSummary
@@ -162,6 +166,11 @@ class MealPlanViewModel @AssistedInject constructor(
         changed()
     }
 
+    fun setStyle(style: FeastStyle) = viewModelScope.launch {
+        plans.setStyle(feastId, style)
+        changed()
+    }
+
     fun setRemind(on: Boolean) = viewModelScope.launch {
         plans.setRemind(feastId, on)
         changed()
@@ -189,6 +198,29 @@ class MealPlanViewModel @AssistedInject constructor(
 private val DISH_COLORS = listOf(
     Color(0xFFE07A5F), Color(0xFF3D85C6), Color(0xFF81B29A), Color(0xFFF2CC8F), Color(0xFF9C6ADE), Color(0xFF4DB6AC),
 )
+
+/** Calm (prep first) or Pro (multitask), with a line saying what that means. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StyleChooser(style: FeastStyle, onChange: (FeastStyle) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            FeastStyle.entries.forEachIndexed { i, s ->
+                SegmentedButton(
+                    selected = style == s, onClick = { onChange(s) },
+                    shape = SegmentedButtonDefaults.itemShape(i, FeastStyle.entries.size),
+                ) { Text(if (s == FeastStyle.CALM) "Calm" else "Pro") }
+            }
+        }
+        Text(
+            when (style) {
+                FeastStyle.CALM -> "All the prep first, then cook. Takes a little longer, much less juggling."
+                FeastStyle.PRO -> "Prep each dish while others cook. Fastest, with more multitasking and exact times."
+            },
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
 
 /** "Prep everything", "Beef stew", "Curry + rice", "Free time". */
 fun FeastBlock.headline(titles: Map<String, String>): String = when (kind) {
@@ -247,8 +279,9 @@ fun MealPlanScreen(
         val d = detail ?: return@Scaffold
         val plan = d.plan
         val all = remember(d.dishes, d.feast.serveAt) {
-            FeastPlanner.plan(d.dishes.map { (r, f) -> FeastDish(r, f) }, d.feast.serveAt)
+            FeastPlanner.plan(d.dishes.map { (r, f) -> FeastDish(r, f) }, d.feast.serveAt, style = d.style)
         }
+        val pro = d.style == FeastStyle.PRO
         val color = d.dishes.mapIndexed { i, (r, _) -> r.id to DISH_COLORS[i % DISH_COLORS.size] }.toMap()
         val titles = d.dishes.associate { (r, _) -> r.id to r.title }
         val behind = plan.minutesBehind(now)
@@ -256,6 +289,7 @@ fun MealPlanScreen(
         val doneTasks = all.tasks.filter { it.id in d.done }
         val doneAdvance = all.advance.filter { it.id in d.done }
         val taskActions = TaskActions(
+            time = { t -> if (pro) formatTime(t.startMillis) else null },
             done = { viewModel.setDone(it.id, true) },
             timer = { t -> startTimer { viewModel.startTimer(t) } },
             open = { t -> stepOpener(d, t, onOpenStep) },
@@ -274,6 +308,7 @@ fun MealPlanScreen(
                     if (d.missing.isNotEmpty()) {
                         Text("Not in your library any more: ${d.missing.joinToString()}", color = MaterialTheme.colorScheme.error)
                     }
+                    StyleChooser(d.style, viewModel::setStyle, Modifier.padding(vertical = 8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Alarm, null)
                         Spacer(Modifier.width(8.dp))
@@ -338,6 +373,8 @@ fun MealPlanScreen(
 }
 
 private class TaskActions(
+    /** Pro style shows each step's exact time; calm style shows none. */
+    val time: (FeastTask) -> String?,
     val done: (FeastTask) -> Unit,
     val timer: (FeastTask) -> Unit,
     val open: (FeastTask) -> (() -> Unit)?,
@@ -395,12 +432,12 @@ private fun CurrentBlock(
             }
             b.blurb().takeIf { it.isNotEmpty() }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             val multi = b.recipeIds.size > 1
-            b.tasks.forEach { t -> TaskCheck(t, if (multi || t.kind == FeastTask.Kind.MISE_EN_PLACE) titles[t.recipeId] else null, color[t.recipeId], actions) }
+            b.tasks.forEach { t -> TaskCheck(t, if (multi) titles[t.recipeId] else null, color[t.recipeId], actions) }
         }
     }
 }
 
-/** One thing on the checklist. */
+/** One thing on the checklist. [dish] is shown when the block mixes dishes. */
 @Composable
 private fun TaskCheck(t: FeastTask, dish: String?, color: Color?, actions: TaskActions) {
     val open = actions.open(t)
@@ -410,12 +447,17 @@ private fun TaskCheck(t: FeastTask, dish: String?, color: Color?, actions: TaskA
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = false, onCheckedChange = { actions.done(t) })
+        actions.time(t)?.let {
+            Text(it, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.widthIn(min = 72.dp))
+        }
         Column(Modifier.weight(1f)) {
             if (t.kind == FeastTask.Kind.MISE_EN_PLACE) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(10.dp).background(color ?: Color.Gray, CircleShape))
-                    Spacer(Modifier.width(6.dp))
-                    Text(dish.orEmpty(), style = MaterialTheme.typography.titleMedium)
+                    if (dish != null) {
+                        Box(Modifier.size(10.dp).background(color ?: Color.Gray, CircleShape))
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(dish ?: "Prep", style = MaterialTheme.typography.titleMedium)
                 }
                 if (t.prepList.isEmpty()) Text("Get the ingredients out and measured", style = MaterialTheme.typography.bodyMedium)
                 t.prepList.forEach { Text("• $it", style = MaterialTheme.typography.bodyLarge) }
@@ -468,7 +510,7 @@ private fun BlockRow(
         }
         if (expanded) {
             val multi = b.recipeIds.size > 1
-            b.tasks.forEach { t -> TaskCheck(t, if (multi || t.kind == FeastTask.Kind.MISE_EN_PLACE) titles[t.recipeId] else null, color[t.recipeId], actions) }
+            b.tasks.forEach { t -> TaskCheck(t, if (multi) titles[t.recipeId] else null, color[t.recipeId], actions) }
         }
     }
 }
