@@ -79,6 +79,9 @@ decisions I made on my own (with the choice and why). Progress is tracked at the
 | M6 | Cooking mode + timers (foreground service, notifications, multi-timer tray) | ✅ |
 | M7 | Settings, QR pairing, folder import, annotations sync, polish | ✅ |
 | M8 | Docs: README setup guide, converting guide | ✅ |
+| F1 | Add recipes from the phone (server inbox + background conversion) | ✅ |
+| F2 | Shopping lists from several recipes | ✅ |
+| F3 | Meal planner: schedule several dishes backwards from a serve time | ✅ |
 
 ---
 
@@ -291,7 +294,6 @@ all tests and publishes the debug APK as a downloadable artifact.
 
 ## 9. Next steps (not built)
 
-* Shopping list UI (the data model already has `aisle`; scaling/units are in `:core`).
 * PDF / photo import in the converter (reader stubs exist in `inputs.py`).
 * Optional HTTPS with a self-signed certificate pinned at pairing.
 * `CloudApiSource`.
@@ -307,3 +309,20 @@ the localhost pairing page, and accepts an override (`--advertise` / `server.adv
 now declares it, asks on launch when the PC server is the source and before pairing / test / sync,
 and explains the permission (with a link to App info) when it's missing. Found on a real device:
 the phone's browser reached the server but the app timed out.
+
+**F1–F3 — added after first use.**
+* *Add recipe:* the app posts pasted/shared text to `POST /api/v1/recipes/import`; the server writes
+  it to `inbox/from-phone/` and, only if its own process has `ANTHROPIC_API_KEY`, converts it on a
+  worker thread with the existing sync converter (manifest stays the source of truth). The app polls
+  `GET /api/v1/imports/{id}` and syncs when done. Without a key the file waits for `convert run`.
+  Jobs are in memory; a server restart forgets them but the inbox file remains.
+* *Shopping lists* (`:core` `ShoppingList`): ingredients are merged by a normalised name (text after
+  a comma or in brackets dropped), summed per dimension in base units and rendered with the usual
+  formatter; counts and "to taste" stay separate; aisles from keyword rules. The list is a snapshot
+  (Room tables, schema v3) so ticking survives recipe edits.
+* *Meal planner* (`:core` `FeastPlanner`): reverse list scheduling for **one cook**. Each dish gets a
+  mise-en-place task then its steps in order; steps with a timer of ≥ 5 min are hands-off after
+  2 active minutes, so other dishes' active work fills those gaps. Untimed steps are estimated from
+  length and ingredient count. Overnight/very long waits become "ahead of time" tasks. Done tasks are
+  stored; the plan is recomputed live, with a "minutes behind" figure and a one-tap serve-time shift.
+  Reminders use exact alarms (falls back to inexact if not allowed). Heuristics, not ground truth.

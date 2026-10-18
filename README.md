@@ -5,6 +5,8 @@ A personal recipe app for Android, with two small companion tools for your PC:
 * **The app** shows recipes in a cook-friendly way: scale servings (or scale to "I've only got
   400 g lamb"), switch between original / metric / US units, amounts written right into the steps,
   step timers that keep ringing with the screen locked, and a big-text cooking mode for messy hands.
+  It can also **add recipes** (paste or share text to your PC), build **shopping lists** from several
+  recipes, and **plan a meal** of several dishes backwards from the time you want to eat.
 * **The server** (`mise-server`) shares the recipes folder on your PC with the phone over your home
   Wi-Fi. The phone keeps a copy of everything, so the kitchen works with the PC switched off.
 * **The converter** (`convert`) turns messy pasted recipe text into the app's structured format, once
@@ -15,6 +17,12 @@ A personal recipe app for Android, with two small companion tools for your PC:
   <img src="docs/screenshots/detail.png" width="23%" alt="Recipe" />
   <img src="docs/screenshots/detail-steps.png" width="23%" alt="Steps with inline amounts and timers" />
   <img src="docs/screenshots/cooking.png" width="23%" alt="Cooking mode" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/library-select.png" width="23%" alt="Pick recipes" />
+  <img src="docs/screenshots/shopping-list.png" width="23%" alt="Shopping list" />
+  <img src="docs/screenshots/meal-plan.png" width="23%" alt="Meal plan" />
+  <img src="docs/screenshots/meal-plan-now.png" width="23%" alt="Meal plan while cooking" />
 </p>
 
 ---
@@ -95,6 +103,18 @@ Short version (details in **[docs/converting.md](docs/converting.md)**):
 
 Running `convert run` again only converts new or changed files.
 
+### Adding recipes from the phone
+
+Tap **Add recipe** in the library (or, in Chrome or any app, *Share → Add to Mise*), paste the recipe
+text and tap **Send to my PC**. The text is saved to `inbox/from-phone/` on the PC.
+
+* If the server was **started with `ANTHROPIC_API_KEY` set** in that terminal, it converts the recipe
+  straight away (one recipe at a time) and it appears in your library within a minute or so. The
+  server's start-up message says whether automatic conversion is on.
+* Without the key, the text just waits in the inbox until you next run `convert run`.
+
+Either way the phone never sees the API key. Adding recipes needs the PC server (not folder mode).
+
 ---
 
 ## Using the app
@@ -116,6 +136,25 @@ Running `convert run` again only converts new or changed files.
 * **Tablets / foldables:** the list and the recipe show side by side.
 * **Settings:** default units, theme, text size (on top of Android's own font size), timer sound,
   keep-screen-on, background sync.
+
+### Shopping lists and meal plans
+
+**Long-press** a recipe in the library to start picking, tap more recipes, then choose:
+
+* **Shopping list** — set servings per recipe and Mise merges everything into one list ("2 onions"
+  from one recipe + "1 onion" from another = "3 onions"), grouped by supermarket aisle. Tick things off
+  as they go in the basket, add your own items (washing-up liquid…), or share the list as text. Lists
+  are saved (🛒 in the top bar) so you can make several.
+* **Plan a meal** — set servings and **when you want to eat**. Mise works backwards and gives every
+  step a clock time, for one cook juggling all the dishes: mise en place (chopping, measuring) for
+  each dish, hands-on steps one after another, and long simmers/rests overlapping with other work.
+  Overnight marinades and the like go under **Ahead of time** with a "start by" time.
+  While cooking, the plan shows **Now** (with the prep list or a timer button) and **Next**; tap
+  **Done** as you go. If you fall behind, it says by how much and offers to move the serve time.
+  Optional reminders notify you when each step is due. Plans live under 🕒 in the top bar.
+
+Step times come from the recipe's timers; steps without a timer get an estimate, so treat the plan as
+a guide and leave a little slack. Shopping lists and meal plans are stored on the phone only.
 
 ### Without the PC: folder mode
 
