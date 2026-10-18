@@ -70,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  advertise_host = \"<address>\" under [server] in {cfg.path}")
     if not (args.advertise or cfg.server.advertise_host) and (warning := wsl_nat_warning(candidates)):
         print("\n  !! " + warning + "\n")
+    if sys.platform == "win32":
+        print("  Phone can't connect? Run:  powershell -ExecutionPolicy Bypass -File scripts\\allow-firewall.ps1")
     print(f"  Access token: {cfg.server.token}")
     print(f"  Pairing page: http://localhost:{port}/  (QR codes for every address, on this PC only)")
     if not args.no_qr:

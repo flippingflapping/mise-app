@@ -202,7 +202,10 @@ use their own environment folder (`.venv-win`), so the two never clash. Point `r
 
 The server listens on TCP port **8765** (change `port` in `config.toml`).
 
-* **Windows** (PowerShell *as administrator*, Private networks only):
+* **Windows** — easiest: `powershell -ExecutionPolicy Bypass -File scripts\allow-firewall.ps1`. It asks
+  for admin rights, opens the port on Private networks, removes Python **block** rules left behind by a
+  cancelled firewall prompt (they override allow rules), and offers to mark your Wi-Fi as Private.
+  Or by hand (PowerShell *as administrator*, Private networks only):
   ```powershell
   New-NetFirewallRule -DisplayName "Mise server" -Direction Inbound -Protocol TCP -LocalPort 8765 -Action Allow -Profile Private
   ```
