@@ -47,3 +47,13 @@ def test_override_wins():
 
 def test_real_machine_does_not_crash():
     assert isinstance(lan_candidates(), list)
+
+
+def test_wsl_nat_is_detected_and_mirrored_is_not():
+    from mise_server.pairing import wsl_nat_warning
+
+    nat = lan_candidates([("172.27.53.10", "eth0")], route_ip="172.27.53.10")
+    assert "mirrored" in wsl_nat_warning(nat, in_wsl=True)
+    mirrored = lan_candidates([("192.168.1.42", "eth1"), ("172.27.53.10", "eth0")], route_ip="192.168.1.42")
+    assert wsl_nat_warning(mirrored, in_wsl=True) is None
+    assert wsl_nat_warning(nat, in_wsl=False) is None

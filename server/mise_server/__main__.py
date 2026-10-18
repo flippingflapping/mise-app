@@ -13,7 +13,7 @@ from mise_shared.config import load_config
 
 from .app import create_app
 from .library import RecipeLibrary, start_watcher
-from .pairing import Candidate, lan_candidates, pairing_uri, terminal_qr
+from .pairing import Candidate, lan_candidates, pairing_uri, terminal_qr, wsl_nat_warning
 
 
 def choose_address(advertise: str, candidates: list[Candidate]) -> tuple[str, list[Candidate]]:
@@ -68,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"      http://{_describe(c).replace(c.ip, f'{c.ip}:{port}', 1)}")
         print("  To put a different one in the QR code: add --advertise <address>, or set")
         print(f"  advertise_host = \"<address>\" under [server] in {cfg.path}")
+    if not (args.advertise or cfg.server.advertise_host) and (warning := wsl_nat_warning(candidates)):
+        print("\n  !! " + warning + "\n")
     print(f"  Access token: {cfg.server.token}")
     print(f"  Pairing page: http://localhost:{port}/  (QR codes for every address, on this PC only)")
     if not args.no_qr:

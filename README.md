@@ -171,6 +171,33 @@ logs) invalid files** instead of crashing, and shows changes without a restart. 
   ```
   then `systemctl --user enable --now mise`.
 
+### Running inside WSL
+
+If the project lives in WSL (a path like `\\wsl.localhost\Ubuntu\...`) and you start the server
+there with `scripts/server.sh`, the phone can't reach it out of the box: WSL2 normally sits behind
+its own private `172.x` network. The server detects this and prints a warning. Pick one:
+
+**A. Keep everything in WSL — turn on mirrored networking** (Windows 11 22H2 or newer):
+
+1. In Windows, create or edit `%UserProfile%\.wslconfig`:
+   ```ini
+   [wsl2]
+   networkingMode=mirrored
+   ```
+2. In PowerShell: `wsl --shutdown`, then open your WSL terminal again. WSL now shares the PC's real
+   addresses (your `192.168.x.x`), and the server picks that one for the QR code.
+3. Allow the port through the Hyper-V firewall that guards WSL (PowerShell **as administrator**):
+   ```powershell
+   New-NetFirewallHyperVRule -Name MiseServer -DisplayName "Mise server (WSL)" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8765
+   ```
+   (plus the normal Windows firewall rule below if the phone still can't connect).
+
+**B. Run the server on Windows itself:** copy the project to a Windows folder (e.g.
+`C:\Users\you\mise-app`) and use the PowerShell scripts from there. Windows Python doesn't work
+well on `\\wsl.localhost` paths, so don't run `setup.ps1` against the WSL copy. The Windows scripts
+use their own environment folder (`.venv-win`), so the two never clash. Point `recipes_dir` in
+`config.toml` at one shared folder if you want both to use the same library.
+
 ### Firewall
 
 The server listens on TCP port **8765** (change `port` in `config.toml`).
@@ -206,8 +233,9 @@ The server listens on TCP port **8765** (change `port` in `config.toml`).
 | Problem | Try |
 |---|---|
 | "Can't reach your PC — showing cached recipes" | Is the server window open? Phone on the same Wi-Fi (not mobile data / guest network)? Firewall allowed? Open `http://<PC address>:8765/api/v1/health` in the phone's browser — it should say `"status":"ok"`. |
+| PowerShell says a script "is not digitally signed" | Start it as `powershell -ExecutionPolicy Bypass -File scripts\\setup.ps1` (the same for `server.ps1` / `convert.ps1`), as shown above. |
 | "The PC rejected the access token" | The token changed. Pair again (Settings → Pair with PC). |
-| The QR code / phone URL shows a `172.x.x.x` address and the phone can't connect | That's usually a virtual adapter (WSL, Hyper-V "vEthernet", Docker, a VPN), not your home network. The server now prefers real Wi-Fi/Ethernet adapters and lists every address with its adapter name. Open <http://localhost:8765/> on the PC for a QR code per address, or pin the right one: `scripts\server.ps1 --advertise 192.168.1.20` (or `advertise_host = "192.168.1.20"` under `[server]` in `config.toml`). On Windows, `ipconfig` shows your Wi-Fi adapter's IPv4 address. |
+| The QR code / phone URL shows a `172.x.x.x` address and the phone can't connect | If the server runs inside WSL, see [Running inside WSL](#running-inside-wsl). Otherwise it's usually a virtual adapter (WSL, Hyper-V "vEthernet", Docker, a VPN), not your home network. The server now prefers real Wi-Fi/Ethernet adapters and lists every address with its adapter name. Open <http://localhost:8765/> on the PC for a QR code per address, or pin the right one: `scripts\server.ps1 --advertise 192.168.1.20` (or `advertise_host = "192.168.1.20"` under `[server]` in `config.toml`). On Windows, `ipconfig` shows your Wi-Fi adapter's IPv4 address. |
 | A recipe doesn't appear | The server log says `Skipping <file>: …` with the reason (invalid JSON or schema error). |
 | Timers don't ring with the screen off | Allow notifications for Mise; on some phones also set Mise's battery usage to *Unrestricted*. |
 | QR scanner unavailable | It needs Google Play services. Use the phone's camera app instead, or *Enter manually*. |

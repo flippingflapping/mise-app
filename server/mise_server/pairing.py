@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import io
 import ipaddress
+import os
 import re
 import socket
 from dataclasses import dataclass
@@ -93,6 +94,32 @@ def lan_candidates(adapters: list[tuple[str, str]] | None = None, route_ip: str 
         if ip not in seen or c.score < seen[ip].score:
             seen[ip] = c
     return sorted(seen.values(), key=lambda c: (c.score, c.ip))
+
+
+def running_in_wsl() -> bool:
+    if os.environ.get("WSL_DISTRO_NAME"):
+        return True
+    try:
+        return "microsoft" in open("/proc/version", encoding="utf-8").read().lower()
+    except OSError:
+        return False
+
+
+def wsl_nat_warning(candidates: list[Candidate], in_wsl: bool | None = None) -> str | None:
+    """Inside WSL2's default (NAT) networking, only a private 172.x address exists: phones can't reach it."""
+    if not (running_in_wsl() if in_wsl is None else in_wsl):
+        return None
+    nat = ipaddress.ip_network("172.16.0.0/12")
+    if any(ipaddress.ip_address(c.ip) not in nat and not c.likely_virtual for c in candidates):
+        return None  # mirrored networking (or similar): the Windows LAN address is visible here
+    return (
+        "This server is running inside WSL, which by default sits behind a private 172.x network that\n"
+        "  your phone can't reach. Fix it one of these ways (README → 'Running inside WSL'):\n"
+        "    1. Turn on WSL mirrored networking: put  [wsl2] networkingMode=mirrored  in\n"
+        "       %UserProfile%\\.wslconfig, run  wsl --shutdown  in PowerShell, start WSL again, and allow\n"
+        "       the port through the Hyper-V firewall (command in the README).\n"
+        "    2. Or run the server on Windows itself, from a copy of the project in a Windows folder."
+    )
 
 
 def lan_ips() -> list[str]:
