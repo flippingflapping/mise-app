@@ -12,6 +12,7 @@ from mise_shared import __version__
 from mise_shared.config import load_config
 
 from .app import create_app
+from .imports import ImportQueue
 from .library import RecipeLibrary, start_watcher
 from .pairing import Candidate, lan_candidates, pairing_uri, terminal_qr, wsl_nat_warning
 
@@ -83,7 +84,13 @@ def main(argv: list[str] | None = None) -> int:
     pairing = [(f"{url}" + (f" ({primary.adapter})" if primary and primary.adapter else ""), uri)]
     pairing += [(f"http://{c.ip}:{port}" + (f" ({c.adapter})" if c.adapter else ""), pairing_uri(f"http://{c.ip}:{port}", cfg.server.token))
                 for c in others if not c.likely_virtual]
-    app = create_app(library, cfg.server.token, pairing=pairing)
+    imports = ImportQueue(cfg, library)
+    if imports.can_convert:
+        print("  Recipes added from the app are converted automatically (ANTHROPIC_API_KEY is set).")
+    else:
+        print("  Recipes added from the app wait in the inbox until you run `convert run`")
+        print("  (set ANTHROPIC_API_KEY before starting the server to convert them automatically).")
+    app = create_app(library, cfg.server.token, pairing=pairing, imports=imports)
     uvicorn.run(app, host=cfg.server.host, port=port, log_level="info", access_log=False)
     return 0
 

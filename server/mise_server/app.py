@@ -7,12 +7,14 @@ from datetime import datetime, timezone
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 
 from mise_shared import SCHEMA_VERSION, __version__
 from mise_shared.models import Annotations
 from mise_shared.util import now_iso
 
+from .imports import MAX_TEXT, ImportQueue
 from .library import SLUG, RecipeLibrary
 from .pairing import pairing_page
 
@@ -27,12 +29,22 @@ def _etag_matches(request: Request, etag: str) -> bool:
     return etag in tags or "*" in tags
 
 
+class ImportRequest(BaseModel):
+    """Body of POST /recipes/import."""
+
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1, max_length=MAX_TEXT)
+    title: str | None = Field(default=None, max_length=300)
+    source: str | None = Field(default=None, max_length=1000)
+
+
 def create_app(
     library: RecipeLibrary,
     token: str,
     *,
     pairing: list[tuple[str, str]] | None = None,
     local_hosts: set[str] = LOCAL_HOSTS,
+    imports: ImportQueue | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Mise companion server", version=__version__, docs_url=None, redoc_url=None)
 
@@ -64,6 +76,8 @@ def create_app(
             "name": "mise-server",
             "version": __version__,
             "schema_version": SCHEMA_VERSION,
+            "can_import": imports is not None,
+            "can_convert": bool(imports and imports.can_convert),
             "time": now_iso(),
         }
 
@@ -121,5 +135,21 @@ def create_app(
         except KeyError:
             raise HTTPException(404, f"no recipe {rid!r}")
         return JSONResponse(entry.recipe, headers={"ETag": entry.etag})
+
+    @app.post("/api/v1/recipes/import", dependencies=auth, status_code=202)
+    def import_recipe(body: ImportRequest) -> dict[str, Any]:
+        """Save pasted recipe text to the inbox (and convert it, if this server has an API key)."""
+        if imports is None:
+            raise HTTPException(501, "this server doesn't accept recipes from the app")
+        if not body.text.strip():
+            raise HTTPException(422, "the recipe text is empty")
+        return imports.submit(body.text, body.title, body.source).as_dict()
+
+    @app.get("/api/v1/imports/{job_id}", dependencies=auth)
+    def import_status(job_id: str) -> dict[str, Any]:
+        job = imports.get(job_id) if imports else None
+        if job is None:
+            raise HTTPException(404, "unknown import (the server may have restarted; the text is still in the inbox)")
+        return job.as_dict()
 
     return app
