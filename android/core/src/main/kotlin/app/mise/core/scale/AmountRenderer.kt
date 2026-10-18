@@ -49,13 +49,17 @@ object AmountRenderer {
         "mango", "banana", "cauliflower", "broccoli", "lettuce", "fennel", "melon",
     )
 
-    fun render(ingredient: Ingredient, factor: Double, mode: UnitMode): RenderedAmount {
+    /**
+     * @param normalize round and promote even at scale 1 (for computed totals such as shopping-list
+     *   sums, which aren't "as authored").
+     */
+    fun render(ingredient: Ingredient, factor: Double, mode: UnitMode, normalize: Boolean = false): RenderedAmount {
         val amount = ingredient.amount
             ?: return RenderedAmount(null, null, ingredient.unit, "to taste", null, true, "to taste")
         val f = if (ingredient.scales) factor else 1.0
         val lo = amount * f
         val hi = ingredient.amountMax?.let { it * f }
-        val unchanged = abs(f - 1.0) < EPS
+        val unchanged = abs(f - 1.0) < EPS && !normalize
 
         return when (Units.dimension(ingredient.unit)) {
             Dimension.COUNT -> {
