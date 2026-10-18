@@ -77,7 +77,12 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, pairingLink: String?, onBack: () -> Unit) {
+fun SettingsScreen(
+    viewModel: SettingsViewModel,
+    pairingLink: String?,
+    onBack: () -> Unit,
+    onConnectionCheck: () -> Unit = {},
+) {
     val s by viewModel.settings.collectAsStateWithLifecycle()
     val check by viewModel.check.collectAsStateWithLifecycle()
     val sync by viewModel.syncStatus.collectAsStateWithLifecycle()
@@ -204,6 +209,9 @@ fun SettingsScreen(viewModel: SettingsViewModel, pairingLink: String?, onBack: (
                         }
                     }
                     ConnectionCheck.Idle -> {}
+                }
+                if (s.sourceKind == SourceKind.LAN) {
+                    TextButton(onClick = onConnectionCheck) { Text("Can't connect? Run a step-by-step connection check") }
                 }
                 Text(
                     s.lastSyncAt?.let { "Last synced " + DateUtils.getRelativeTimeSpanString(it).toString().lowercase() }

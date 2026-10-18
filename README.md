@@ -307,7 +307,15 @@ The server listens on TCP port **8765** (change `port` in `config.toml`).
 
 ### Finding where the connection breaks
 
-Run these in order with the server running; the first one that fails tells you where to look.
+**Quickest:** in Mise, **Settings → Can't connect? Run a step-by-step connection check** (or tap the
+"Can't reach your PC" banner). It tests the permission, Wi-Fi/VPN, a raw connection, the server
+and the access token separately and says which one fails; the share button sends the results
+(never the token). At the same time, watch the server window, or `logs/server.log` in the project
+folder: every request that reaches the PC is listed with the phone's address and the result. If
+nothing shows up there, the phone's requests never arrive (network or firewall); if they show up
+with `401`, pair again.
+
+Or by hand, run these in order with the server running; the first one that fails tells you where to look.
 
 | # | Where | Command | If it fails |
 |---|---|---|---|

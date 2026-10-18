@@ -31,6 +31,7 @@ import app.mise.ui.library.LibraryScreen
 import app.mise.ui.library.LibraryViewModel
 import app.mise.ui.original.OriginalTextScreen
 import app.mise.ui.original.OriginalTextViewModel
+import app.mise.ui.settings.ConnectionCheckScreen
 import app.mise.ui.settings.SettingsScreen
 import app.mise.ui.add.AddRecipeScreen
 import app.mise.ui.add.AddRecipeViewModel
@@ -50,6 +51,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class CookingRoute(val id: String, val step: Int = 0)
 @Serializable data class OriginalRoute(val id: String)
 @Serializable data class SettingsRoute(val pairingLink: String? = null)
+@Serializable data object ConnectionCheckRoute
 @Serializable data class AddRecipeRoute(val text: String? = null, val subject: String? = null)
 @Serializable data object ShoppingListsRoute
 @Serializable data class ShoppingListRoute(val id: Long)
@@ -64,6 +66,7 @@ data class LibraryActions(
     val onShoppingLists: () -> Unit = {},
     val onMeals: () -> Unit = {},
     val onNewPlan: (kind: String, ids: List<String>) -> Unit = { _, _ -> },
+    val onConnectionCheck: () -> Unit = {},
 )
 
 /** Two panes (list + detail) at this width and above: tablets, unfolded foldables, landscape. */
@@ -101,6 +104,7 @@ fun MiseNavHost(launch: LaunchRequest?, onLaunchHandled: () -> Unit, nav: NavHos
                     onShoppingLists = { nav.navigate(ShoppingListsRoute) },
                     onMeals = { nav.navigate(MealPlansRoute) },
                     onNewPlan = { kind, ids -> nav.navigate(NewPlanRoute(kind, ids.joinToString(","))) },
+                    onConnectionCheck = { nav.navigate(ConnectionCheckRoute) },
                 ),
             ) { id, onSelect ->
                 val vm = hiltViewModel<RecipeDetailViewModel, RecipeDetailViewModel.Factory>(key = "pane-$id") { it.create(id) }
@@ -168,7 +172,13 @@ fun MiseNavHost(launch: LaunchRequest?, onLaunchHandled: () -> Unit, nav: NavHos
             )
         }
         composable<SettingsRoute> { entry ->
-            SettingsScreen(hiltViewModel(), entry.toRoute<SettingsRoute>().pairingLink, onBack = { nav.popBackStack() })
+            SettingsScreen(
+                hiltViewModel(), entry.toRoute<SettingsRoute>().pairingLink, onBack = { nav.popBackStack() },
+                onConnectionCheck = { nav.navigate(ConnectionCheckRoute) },
+            )
+        }
+        composable<ConnectionCheckRoute> {
+            ConnectionCheckScreen(hiltViewModel(), onBack = { nav.popBackStack() })
         }
     }
 }
@@ -192,7 +202,7 @@ fun LibraryWithDetail(
             LibraryScreen(
                 libraryVm, selectedId = null, onOpen = onOpenFullScreen, onSettings = onSettings,
                 onAddRecipe = actions.onAddRecipe, onShoppingLists = actions.onShoppingLists,
-                onMeals = actions.onMeals, onNewPlan = actions.onNewPlan,
+                onMeals = actions.onMeals, onNewPlan = actions.onNewPlan, onConnectionCheck = actions.onConnectionCheck,
             )
         } else {
             Row(Modifier.fillMaxSize()) {
@@ -202,7 +212,7 @@ fun LibraryWithDetail(
                     onSettings = onSettings,
                     modifier = Modifier.width((width * 0.38f).coerceAtLeast(320.dp)).fillMaxHeight(),
                     onAddRecipe = actions.onAddRecipe, onShoppingLists = actions.onShoppingLists,
-                    onMeals = actions.onMeals, onNewPlan = actions.onNewPlan,
+                    onMeals = actions.onMeals, onNewPlan = actions.onNewPlan, onConnectionCheck = actions.onConnectionCheck,
                 )
                 VerticalDivider()
                 val id = selected

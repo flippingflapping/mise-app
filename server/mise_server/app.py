@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
+import time
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
@@ -19,6 +21,8 @@ from .library import SLUG, RecipeLibrary
 from .pairing import pairing_page
 
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+log = logging.getLogger("mise.requests")
 
 
 def _etag_matches(request: Request, etag: str) -> bool:
@@ -47,6 +51,27 @@ def create_app(
     imports: ImportQueue | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Mise companion server", version=__version__, docs_url=None, redoc_url=None)
+    seen: set[str] = set()
+
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):
+        """One line per request, so you can see whether the phone gets through at all (never logs the token)."""
+        client = request.client.host if request.client else "?"
+        if client not in seen and client not in local_hosts:
+            seen.add(client)
+            log.info("First request from %s (a new device; if that is the phone, the network path works).", client)
+        start = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            log.exception("%s %s %s failed", client, request.method, request.url.path)
+            raise
+        ms = (time.perf_counter() - start) * 1000
+        note = ""
+        if response.status_code == 401:
+            note = "  ← wrong or missing access token: pair the phone again"
+        log.info("%s %s %s → %d (%.0f ms)%s", client, request.method, request.url.path, response.status_code, ms, note)
+        return response
 
     def require_token(request: Request) -> None:
         auth = request.headers.get("authorization", "")

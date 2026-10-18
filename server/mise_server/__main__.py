@@ -32,6 +32,20 @@ def _describe(c: Candidate) -> str:
     return f"{c.ip}{name}{hint}"
 
 
+def _log_to_file(path):
+    """Also write the log to logs/server.log (rotated at 1 MB) so it can be looked at or shared."""
+    from logging.handlers import RotatingFileHandler
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handler = RotatingFileHandler(path, maxBytes=1_000_000, backupCount=2, encoding="utf-8")
+    except OSError:
+        return None
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s", "%Y-%m-%d %H:%M:%S"))
+    logging.getLogger().addHandler(handler)
+    return path
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="mise-server", description=__doc__)
     p.add_argument("--config", help="path to config.toml (default: repo root, or $MISE_CONFIG)")
@@ -46,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
     cfg = load_config(args.config)
+    log_file = _log_to_file(cfg.path.parent / "logs" / "server.log")
     port = args.port or cfg.server.port
 
     library = RecipeLibrary(cfg.recipes_dir)
@@ -78,6 +93,12 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_qr:
         print("\n  Scan with the Mise app (Settings → Pair with PC):\n")
         print(terminal_qr(uri))
+    logging.getLogger("mise.server").info(
+        "Started %s on %s:%d; QR address %s; all addresses: %s", __version__, cfg.server.host, port, url,
+        ", ".join(_describe(c) for c in candidates) or "none found",
+    )
+    if log_file:
+        print(f"  Log file:     {log_file}  (every request from the phone is listed here)")
     print("  Press Ctrl+C to stop.\n")
     sys.stdout.flush()
 

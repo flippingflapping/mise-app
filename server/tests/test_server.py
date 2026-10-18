@@ -1,4 +1,5 @@
 import json
+import logging
 import shutil
 import time
 
@@ -36,6 +37,17 @@ def library(folder):
 def client(library):
     app = create_app(library, TOKEN, pairing=[("x", "mise://pair?url=x&token=y")], local_hosts={"testclient"})
     return TestClient(app)
+
+
+def test_requests_are_logged_without_the_token(client, caplog):
+    with caplog.at_level(logging.INFO, logger="mise.requests"):
+        client.get("/api/v1/health")
+        client.get("/api/v1/recipes", headers={"Authorization": "Bearer nope"})
+        client.get("/api/v1/recipes", headers={"Authorization": f"Bearer {TOKEN}"})
+    text = caplog.text
+    assert "GET /api/v1/health → 200" in text
+    assert "→ 401" in text and "pair the phone again" in text
+    assert TOKEN not in text and "nope" not in text
 
 
 def test_health_needs_no_token(client):

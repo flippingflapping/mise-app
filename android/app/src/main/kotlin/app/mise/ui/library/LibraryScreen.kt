@@ -82,6 +82,7 @@ fun LibraryScreen(
     onMeals: () -> Unit = {},
     /** kind is "shopping" or "meal"; ids in the order picked. */
     onNewPlan: (kind: String, ids: List<String>) -> Unit = { _, _ -> },
+    onConnectionCheck: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val picking = state.picked.isNotEmpty()
@@ -167,12 +168,21 @@ fun LibraryScreen(
                     item(key = "banner") {
                         val context = LocalContext.current
                         val permissionMissing = state.source == SourceKind.LAN && LocalNetworkPermission.needed(context)
+                        val unreachable = state.source == SourceKind.LAN && b.startsWith("Can't reach")
                         StatusBanner(
-                            if (permissionMissing) "$b. ${LocalNetworkPermission.EXPLANATION}" else b,
+                            when {
+                                permissionMissing -> "$b. ${LocalNetworkPermission.EXPLANATION}"
+                                unreachable -> "$b. Tap to check the connection step by step."
+                                else -> b
+                            },
                             Modifier.padding(16.dp, 8.dp).then(
-                                if (permissionMissing) Modifier.clickable {
-                                    context.startActivity(LocalNetworkPermission.appSettingsIntent(context))
-                                } else Modifier,
+                                when {
+                                    permissionMissing -> Modifier.clickable {
+                                        context.startActivity(LocalNetworkPermission.appSettingsIntent(context))
+                                    }
+                                    unreachable -> Modifier.clickable(onClick = onConnectionCheck)
+                                    else -> Modifier
+                                },
                             ),
                         )
                     }
