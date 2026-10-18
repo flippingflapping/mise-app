@@ -22,7 +22,7 @@ A personal recipe app for Android, with two small companion tools for your PC:
   <img src="docs/screenshots/library-select.png" width="23%" alt="Pick recipes" />
   <img src="docs/screenshots/shopping-list.png" width="23%" alt="Shopping list" />
   <img src="docs/screenshots/meal-plan.png" width="23%" alt="Meal plan" />
-  <img src="docs/screenshots/meal-plan-now.png" width="23%" alt="Meal plan while cooking" />
+  <img src="docs/screenshots/meal-plan-later.png" width="23%" alt="Meal plan blocks" />
 </p>
 
 ---
@@ -145,13 +145,22 @@ Either way the phone never sees the API key. Adding recipes needs the PC server 
   from one recipe + "1 onion" from another = "3 onions"), grouped by supermarket aisle. Tick things off
   as they go in the basket, add your own items (washing-up liquid…), or share the list as text. Lists
   are saved (🛒 in the top bar) so you can make several.
-* **Plan a meal** — set servings and **when you want to eat**. Mise works backwards and gives every
-  step a clock time, for one cook juggling all the dishes: mise en place (chopping, measuring) for
-  each dish, hands-on steps one after another, and long simmers/rests overlapping with other work.
-  Overnight marinades and the like go under **Ahead of time** with a "start by" time.
-  While cooking, the plan shows **Now** (with the prep list or a timer button) and **Next**; tap
-  **Done** as you go. If you fall behind, it says by how much and offers to move the serve time.
-  Optional reminders notify you when each step is due. Plans live under 🕒 in the top bar.
+* **Plan a meal** — set servings and **when you want to eat**. Mise works backwards and splits the
+  cooking into a few blocks with round, approximate times, for example:
+
+  | | |
+  |---|---|
+  | **about 5:15** | Prep everything · about 30 min |
+  | **about 5:45** | Beef stew · about 15 min |
+  | **about 6:00** | Free time · about 1 hour (things are cooking) |
+  | **about 7:00** | Bring it all together · about 45 min |
+  | **7:45** | Eat! |
+
+  All the chopping and measuring comes first, in one go. Inside a block there are no clock times,
+  just a checklist in order (with timer buttons where a step has one). Only the block you're on is
+  open; later ones are one line each (tap to peek). Overnight marinades and the like go under
+  **Ahead of time**. If you fall behind by 10 minutes or more it says so and offers to push dinner
+  back. Optional reminders notify you when each block starts. Plans live under 🕒 in the top bar.
 
 Step times come from the recipe's timers; steps without a timer get an estimate, so treat the plan as
 a guide and leave a little slack. Shopping lists and meal plans are stored on the phone only.

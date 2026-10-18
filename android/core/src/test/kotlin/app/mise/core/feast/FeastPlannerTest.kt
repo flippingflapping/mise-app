@@ -23,6 +23,19 @@ class FeastPlannerTest {
         ),
     )
 
+    private val stew = Recipe(
+        id = "stew", title = "Beef stew", recipeYield = RecipeYield(4.0),
+        ingredients = listOf(
+            Ingredient("0001", name = "beef shin", amount = 1.0, unit = MeasureUnit.KG, prep = "diced"),
+            Ingredient("0002", name = "carrots", amount = 3.0, prep = "chopped"),
+        ),
+        steps = listOf(
+            Step("s1", "Brown", "Brown {0001} in batches.", timerSeconds = 600),
+            Step("s2", "Simmer", "Add {0002}, cover and simmer gently.", timerSeconds = 2 * 3600),
+            Step("s3", "Season", "Taste and season."),
+        ),
+    )
+
     /** The cook never does two hands-on things at once. */
     private fun assertNoOverlap(plan: FeastPlan) {
         val active = plan.tasks.map { it.startMillis until it.startMillis + it.activeMillis }.sortedBy { it.first }
@@ -77,9 +90,11 @@ class FeastPlannerTest {
         val first = plan.tasks.first()
         val after = FeastPlanner.plan(listOf(FeastDish(curry), FeastDish(rice)), serve, done = setOf(first.id))
         assertThat(after.tasks.map { it.id }).doesNotContain(first.id)
-        assertThat(after.minutesBehind(after.startAtMillis - 5 * min)).isEqualTo(0)
-        assertThat(after.minutesBehind(after.startAtMillis + 12 * min)).isEqualTo(12)
-        assertThat(after.current(after.startAtMillis).map { it.id }).contains(after.tasks.first().id)
+        val firstStart = after.tasks.first().startMillis
+        assertThat(after.minutesBehind(firstStart - 5 * min)).isEqualTo(0)
+        assertThat(after.minutesBehind(firstStart + 7 * min)).isEqualTo(0) // not worth worrying about
+        assertThat(after.minutesBehind(firstStart + 12 * min)).isEqualTo(15) // rounded to 5
+        assertThat(after.currentBlock).isEqualTo(after.blocks.first())
     }
 
     @Test fun stableIdsAndEmptyPlan() {
@@ -89,5 +104,55 @@ class FeastPlannerTest {
         val empty = FeastPlanner.plan(emptyList(), serve)
         assertThat(empty.tasks).isEmpty()
         assertThat(empty.startAtMillis).isEqualTo(serve)
+    }
+
+    /** Blocks tile the evening with a few round times, and every task appears exactly once. */
+    private fun assertTidyBlocks(plan: FeastPlan) {
+        val blocks = plan.blocks
+        assertThat(blocks.first().startMillis % (15 * min)).isEqualTo(0)
+        blocks.forEach { assertThat(it.startMillis % (5 * min)).isEqualTo(0) }
+        blocks.zipWithNext().forEach { (a, b) -> assertThat(a.endMillis).isEqualTo(b.startMillis) }
+        assertThat(blocks.last().endMillis).isEqualTo(serve)
+        assertThat(blocks.flatMap { it.tasks }.map { it.id }).containsExactlyElementsIn(plan.tasks.map { it.id })
+        blocks.forEach { b -> assertThat(b.startMillis).isAtMost(b.tasks.minOfOrNull { it.startMillis } ?: b.startMillis) }
+    }
+
+    @Test fun prepComesFirstAsOneBlock() {
+        val plan = FeastPlanner.plan(listOf(FeastDish(curry), FeastDish(rice)), serve)
+        val prep = plan.blocks.first()
+        assertThat(prep.kind).isEqualTo(FeastBlock.Kind.PREP)
+        assertThat(prep.tasks.map { it.kind }.toSet()).containsExactly(FeastTask.Kind.MISE_EN_PLACE)
+        assertThat(prep.recipeIds).containsExactly(curry.id, "rice")
+        val cookStart = plan.tasks.filter { it.kind == FeastTask.Kind.STEP }.minOf { it.startMillis }
+        plan.tasks.filter { it.kind == FeastTask.Kind.MISE_EN_PLACE }.forEach { assertThat(it.endMillis).isAtMost(cookStart) }
+        assertNoOverlap(plan)
+        assertTidyBlocks(plan)
+        // a handful of blocks, not a list of every minute
+        assertThat(plan.blocks.size).isAtMost(4)
+    }
+
+    @Test fun longSimmerLeavesFreeTime() {
+        val plan = FeastPlanner.plan(listOf(FeastDish(stew), FeastDish(rice)), serve)
+        assertTidyBlocks(plan)
+        val kinds = plan.blocks.map { it.kind }
+        assertThat(kinds.first()).isEqualTo(FeastBlock.Kind.PREP)
+        assertThat(kinds).contains(FeastBlock.Kind.BREAK)
+        val free = plan.blocks.first { it.kind == FeastBlock.Kind.BREAK }
+        assertThat(free.approxMinutes).isAtLeast(60)
+        assertThat(free.tasks).isEmpty()
+        // once the work before the break is done, the next work block is current, never the break
+        val before = plan.blocks.takeWhile { it.kind != FeastBlock.Kind.BREAK }.flatMap { it.tasks }.map { it.id }.toSet()
+        val later = FeastPlanner.plan(listOf(FeastDish(stew), FeastDish(rice)), serve, done = before)
+        assertThat(later.currentBlock?.kind).isEqualTo(FeastBlock.Kind.COOK)
+    }
+
+    @Test fun friendlyDurations() {
+        fun b(minutes: Int) = FeastBlock(FeastBlock.Kind.COOK, 0, minutes * min, emptyList()).approxMinutes
+        assertThat(b(2)).isEqualTo(5)
+        assertThat(b(13)).isEqualTo(15)
+        assertThat(b(58)).isEqualTo(60)
+        assertThat(b(68)).isEqualTo(75)
+        assertThat(b(97)).isEqualTo(90)
+        assertThat(b(100)).isEqualTo(105)
     }
 }

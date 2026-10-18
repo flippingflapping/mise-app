@@ -20,6 +20,11 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.mise.TestFixtures
+import app.mise.core.model.Ingredient
+import app.mise.core.model.MeasureUnit
+import app.mise.core.model.Recipe
+import app.mise.core.model.RecipeYield
+import app.mise.core.model.Step
 import app.mise.core.units.UnitMode
 import app.mise.data.FakeSettings
 import app.mise.data.FakeSource
@@ -148,17 +153,52 @@ class PlansScreensTest {
         screenshot("shopping-list")
     }
 
+    private fun addSides() {
+        fun ing(id: String, name: String, amount: Double, unit: MeasureUnit?, prep: String?) =
+            Ingredient(id, name = name, amount = amount, unit = unit, prep = prep)
+        source.put(
+            Recipe(
+                id = "beef-stew", title = "Beef stew", recipeYield = RecipeYield(4.0),
+                ingredients = listOf(ing("0001", "beef shin", 1.0, MeasureUnit.KG, "diced"), ing("0002", "carrots", 3.0, null, "chopped")),
+                steps = listOf(
+                    Step("s1", "Brown the beef", "Brown {0001} in batches.", timerSeconds = 600),
+                    Step("s2", "Simmer", "Add {0002}, cover and simmer gently.", timerSeconds = 2 * 3600),
+                    Step("s3", "Season", "Taste and season."),
+                ),
+            ),
+            "\"s1\"",
+        )
+        source.put(
+            Recipe(
+                id = "rice", title = "Rice", recipeYield = RecipeYield(4.0),
+                ingredients = listOf(ing("0001", "basmati rice", 300.0, MeasureUnit.G, "rinsed")),
+                steps = listOf(
+                    Step("s1", "Boil", "Boil {0001} in plenty of water.", timerSeconds = 600),
+                    Step("s2", "Steam", "Drain, cover and leave to steam.", timerSeconds = 300),
+                ),
+            ),
+            "\"r1\"",
+        )
+        runBlocking { repo.sync() }
+    }
+
     @Test fun mealPlanWellAhead() {
+        addSides()
         val serve = System.currentTimeMillis() + 5 * 3_600_000L
-        val feastId = runBlocking { plans.createFeast("Dinner", serve, listOf(Pick(id, 4.0))) }
+        val feastId = runBlocking { plans.createFeast("Saturday feast", serve, listOf(Pick(id, 4.0), Pick("beef-stew", 4.0), Pick("rice", 4.0))) }
         val vm = MealPlanViewModel(feastId, plans, reminders, timers)
         show { MealPlanScreen(vm, onBack = {}, onOpenStep = { _, _ -> }) }
-        waitFor("Start cooking at", substring = true)
+        waitFor("Start at about", substring = true)
         compose.onNodeWithText("Ahead of time").assertExists()
         compose.onNodeWithText("The day before: Marinate overnight").assertExists()
-        compose.onNodeWithText("Next").assertExists()
-        compose.onNodeWithText("Mise en place").assertExists()
+        // The first block (prep) is open with its checklist; the rest are one line each.
+        compose.onNodeWithText("First, at about", substring = true).assertExists()
+        compose.onNodeWithText("Prep everything").assertExists()
+        compose.onNodeWithText("• onion: sliced").assertExists()
         screenshot("meal-plan")
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Eat!"))
+        compose.onNodeWithText("Free time").assertExists()
+        screenshot("meal-plan-later")
     }
 
     @Test fun mealPlanInProgressWithLateness() {
@@ -166,12 +206,12 @@ class PlansScreensTest {
         val feastId = runBlocking { plans.createFeast("Tonight", serve, listOf(Pick(id, 2.0))) }
         val vm = MealPlanViewModel(feastId, plans, reminders, timers)
         show { MealPlanScreen(vm, onBack = {}, onOpenStep = { _, _ -> }) }
-        waitFor("Now")
-        waitFor("behind", substring = true)
+        waitFor("Now", substring = true)
+        waitFor("Running about", substring = true)
         screenshot("meal-plan-now")
-        compose.onAllNodesWithText("Done")[0].performClick()
+        compose.onAllNodes(androidx.compose.ui.test.isToggleable())[2].performClick() // after the reminder switch and the overnight task: first task in the "Now" block
         compose.waitUntil(10_000) { runBlocking { plans.feast(feastId).first()!!.done.isNotEmpty() } }
-        compose.onNode(hasText("Move serve time to", substring = true)).performClick()
+        compose.onNode(hasText("Eat at", substring = true) and androidx.compose.ui.test.hasClickAction()).performClick()
         compose.waitUntil(10_000) { runBlocking { plans.feast(feastId).first()!!.feast.serveAt > serve } }
     }
 

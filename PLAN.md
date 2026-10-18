@@ -326,3 +326,14 @@ the phone's browser reached the server but the app timed out.
   length and ingredient count. Overnight/very long waits become "ahead of time" tasks. Done tasks are
   stored; the plan is recomputed live, with a "minutes behind" figure and a one-tap serve-time shift.
   Reminders use exact alarms (falls back to inexact if not allowed). Heuristics, not ground truth.
+
+**Meal planner: blocks instead of minute-by-minute times** (after first use: a list of times like
+9:13 and 9:43 was stressful to read). All mise en place now comes first as one block, ending when
+the cooking starts. The cooking is cut into blocks at gaps of 10+ minutes with nothing to do (shown
+as "Free time"), then by dish; stretches of a dish under 10 minutes join the neighbouring block, so
+juggling several dishes reads as one block ("Bring it all together" for 3+ dishes). Block starts are
+rounded down to 5 minutes (the first to 15) and durations shown as "about 20 min" / "about 1½ hours".
+Inside a block: an ordered checklist with no clock times. The first block with anything left is the
+"Now" card; others are one line each. "Running late" only appears from 10 minutes, rounded to 5,
+and pushing dinner back lands on a round 5 minutes. Reminders fire per block, not per step. The
+scheduler underneath is unchanged apart from prep moving to the front.

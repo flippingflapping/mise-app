@@ -10,6 +10,9 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import app.mise.core.feast.FeastBlock
+import app.mise.ui.plans.approxDuration
+import app.mise.ui.plans.headline
 import androidx.core.app.NotificationManagerCompat
 import app.mise.MainActivity
 import app.mise.R
@@ -18,8 +21,6 @@ import app.mise.di.Clock
 import app.mise.timers.TimerNotifications
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.text.DateFormat
-import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,20 +53,21 @@ class FeastReminders @Inject constructor(
         if (!feast.remind) return
         val now = clock.now()
         val keys = mutableSetOf<String>()
-        for (task in plan.tasks.filter { it.startMillis > now }) {
-            val code = "$feastId|${task.id}"
+        val titles = plan.tasks.associate { it.recipeId to it.recipeTitle }
+        for (block in plan.blocks.filter { it.kind != FeastBlock.Kind.BREAK && it.startMillis > now }) {
+            val code = "$feastId|${block.id}"
             val intent = Intent(context, FeastReminderReceiver::class.java)
                 .putExtra(EXTRA_FEAST, feastId)
-                .putExtra(EXTRA_TITLE, task.title)
-                .putExtra(EXTRA_RECIPE, task.recipeTitle)
-                .putExtra(EXTRA_AT, task.startMillis)
+                .putExtra(EXTRA_TITLE, block.headline(titles))
+                .putExtra(EXTRA_DETAIL, "${approxDuration(block.approxMinutes)} · ${feast.name}")
+                .putExtra(EXTRA_AT, block.startMillis)
             val pi = PendingIntent.getBroadcast(context, code.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val exact = Build.VERSION.SDK_INT < 31 || alarms.canScheduleExactAlarms()
             try {
-                if (exact) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.startMillis, pi)
-                else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.startMillis, pi)
+                if (exact) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, block.startMillis, pi)
+                else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, block.startMillis, pi)
             } catch (_: SecurityException) {
-                alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.startMillis, pi)
+                alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, block.startMillis, pi)
             }
             keys += code
         }
@@ -91,7 +93,7 @@ class FeastReminders @Inject constructor(
         const val CHANNEL = "feast_reminders"
         const val EXTRA_FEAST = "feast_id"
         const val EXTRA_TITLE = "title"
-        const val EXTRA_RECIPE = "recipe"
+        const val EXTRA_DETAIL = "detail"
         const val EXTRA_AT = "at"
     }
 }
@@ -102,7 +104,7 @@ class FeastReminderReceiver : BroadcastReceiver() {
         if (!TimerNotifications.canPost(context)) return
         val feastId = intent.getLongExtra(FeastReminders.EXTRA_FEAST, -1)
         val title = intent.getStringExtra(FeastReminders.EXTRA_TITLE) ?: return
-        val recipe = intent.getStringExtra(FeastReminders.EXTRA_RECIPE).orEmpty()
+        val detail = intent.getStringExtra(FeastReminders.EXTRA_DETAIL).orEmpty()
         val at = intent.getLongExtra(FeastReminders.EXTRA_AT, System.currentTimeMillis())
         val open = PendingIntent.getActivity(
             context, feastId.toInt(),
@@ -112,8 +114,8 @@ class FeastReminderReceiver : BroadcastReceiver() {
         )
         val n = NotificationCompat.Builder(context, FeastReminders.CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_timer)
-            .setContentTitle("Time to: $title")
-            .setContentText("$recipe · ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at))}")
+            .setContentTitle("Time to start: $title")
+            .setContentText(detail)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
