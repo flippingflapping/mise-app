@@ -34,7 +34,7 @@ def library(folder):
 
 @pytest.fixture
 def client(library):
-    app = create_app(library, TOKEN, pairing_uri="mise://pair?url=x&token=y", local_hosts={"testclient"})
+    app = create_app(library, TOKEN, pairing=[("x", "mise://pair?url=x&token=y")], local_hosts={"testclient"})
     return TestClient(app)
 
 
@@ -165,9 +165,9 @@ def test_watcher_picks_up_changes(folder, library):
 
 
 def test_pairing_page_only_on_localhost(library):
-    local = TestClient(create_app(library, TOKEN, pairing_uri="mise://pair?url=u&token=secret", local_hosts={"testclient"}))
+    local = TestClient(create_app(library, TOKEN, pairing=[("u", "mise://pair?url=u&token=secret")], local_hosts={"testclient"}))
     assert "<svg" in local.get("/").text
-    remote = TestClient(create_app(library, TOKEN, pairing_uri="mise://pair?url=u&token=secret", local_hosts=set()))
+    remote = TestClient(create_app(library, TOKEN, pairing=[("u", "mise://pair?url=u&token=secret")], local_hosts=set()))
     assert "secret" not in remote.get("/").text
 
 

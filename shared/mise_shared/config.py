@@ -27,7 +27,7 @@ DEFAULT_CONFIG_PATH = REPO_ROOT / "config.toml"
 
 DEFAULTS: dict[str, Any] = {
     "library": {"recipes_dir": "recipes"},
-    "server": {"host": "0.0.0.0", "port": 8765, "token": ""},
+    "server": {"host": "0.0.0.0", "port": 8765, "token": "", "advertise_host": ""},
     "converter": {
         "inbox_dir": "inbox",
         "model": "claude-sonnet-5-5",
@@ -85,6 +85,8 @@ class ServerConfig:
     host: str
     port: int
     token: str
+    #: The address put in the pairing QR code. Empty = auto-detect the PC's LAN address.
+    advertise_host: str = ""
 
 
 @dataclass
@@ -135,7 +137,7 @@ def load_config(explicit: str | Path | None = None, *, create: bool = True) -> C
     return Config(
         path=path,
         recipes_dir=p(raw["library"]["recipes_dir"]),
-        server=ServerConfig(host=s["host"], port=int(s["port"]), token=s["token"]),
+        server=ServerConfig(host=s["host"], port=int(s["port"]), token=s["token"], advertise_host=str(s.get("advertise_host") or "")),
         converter=ConverterConfig(
             inbox_dir=p(c["inbox_dir"]),
             model=c["model"],

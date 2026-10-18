@@ -181,7 +181,17 @@ fun SettingsScreen(viewModel: SettingsViewModel, pairingLink: String?, onBack: (
                 when (val c = check) {
                     ConnectionCheck.Running -> Text("Checking…")
                     is ConnectionCheck.Ok -> Text("✓ ${c.message}", color = MaterialTheme.colorScheme.primary)
-                    is ConnectionCheck.Failed -> Text("✗ ${c.message}", color = MaterialTheme.colorScheme.error)
+                    is ConnectionCheck.Failed -> {
+                        Text("✗ ${c.message}", color = MaterialTheme.colorScheme.error)
+                        if (s.sourceKind == SourceKind.LAN && c.message.startsWith("Can't reach")) {
+                            Text(
+                                "Check that the phone is on the same Wi-Fi, and that the address is your PC's Wi-Fi/Ethernet " +
+                                    "address (usually 192.168.x.x). 172.x addresses are often virtual adapters (WSL, Docker) " +
+                                    "the phone can't reach — open http://localhost:8765 on the PC for QR codes of every address.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                     ConnectionCheck.Idle -> {}
                 }
                 Text(

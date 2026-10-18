@@ -207,7 +207,7 @@ The server listens on TCP port **8765** (change `port` in `config.toml`).
 |---|---|
 | "Can't reach your PC — showing cached recipes" | Is the server window open? Phone on the same Wi-Fi (not mobile data / guest network)? Firewall allowed? Open `http://<PC address>:8765/api/v1/health` in the phone's browser — it should say `"status":"ok"`. |
 | "The PC rejected the access token" | The token changed. Pair again (Settings → Pair with PC). |
-| The address printed by the server doesn't work | PCs with several network adapters (VPN, Docker…) may print the wrong one; the server lists alternatives ("also maybe"). On Windows, `ipconfig` shows your Wi-Fi adapter's IPv4 address. |
+| The QR code / phone URL shows a `172.x.x.x` address and the phone can't connect | That's usually a virtual adapter (WSL, Hyper-V "vEthernet", Docker, a VPN), not your home network. The server now prefers real Wi-Fi/Ethernet adapters and lists every address with its adapter name. Open <http://localhost:8765/> on the PC for a QR code per address, or pin the right one: `scripts\server.ps1 --advertise 192.168.1.20` (or `advertise_host = "192.168.1.20"` under `[server]` in `config.toml`). On Windows, `ipconfig` shows your Wi-Fi adapter's IPv4 address. |
 | A recipe doesn't appear | The server log says `Skipping <file>: …` with the reason (invalid JSON or schema error). |
 | Timers don't ring with the screen off | Allow notifications for Mise; on some phones also set Mise's battery usage to *Unrestricted*. |
 | QR scanner unavailable | It needs Google Play services. Use the phone's camera app instead, or *Enter manually*. |

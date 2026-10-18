@@ -31,7 +31,7 @@ def create_app(
     library: RecipeLibrary,
     token: str,
     *,
-    pairing_uri: str | None = None,
+    pairing: list[tuple[str, str]] | None = None,
     local_hosts: set[str] = LOCAL_HOSTS,
 ) -> FastAPI:
     app = FastAPI(title="Mise companion server", version=__version__, docs_url=None, redoc_url=None)
@@ -53,8 +53,8 @@ def create_app(
     @app.get("/", include_in_schema=False)
     def home(request: Request) -> Response:
         host = request.client.host if request.client else ""
-        if host in local_hosts and pairing_uri:
-            return HTMLResponse(pairing_page(pairing_uri))
+        if host in local_hosts and pairing:
+            return HTMLResponse(pairing_page(pairing))
         return PlainTextResponse("Mise companion server. Pair from the app; open this page on the PC itself to see the QR code.")
 
     @app.get("/api/v1/health")

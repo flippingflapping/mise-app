@@ -295,3 +295,9 @@ all tests and publishes the debug APK as a downloadable artifact.
 * PDF / photo import in the converter (reader stubs exist in `inputs.py`).
 * Optional HTTPS with a self-signed certificate pinned at pairing.
 * `CloudApiSource`.
+
+**Fix (after first real-device use): pairing QR used an unreachable 172.x address.** The server
+picked the default-route interface, which on Windows with WSL/Hyper-V (or Docker/VPNs) is a virtual
+adapter. It now enumerates adapters by name (`ifaddr`), ranks real Wi-Fi/Ethernet and 192.168/10.x
+first, flags virtual adapters, prints every address with its adapter name, shows a QR per address on
+the localhost pairing page, and accepts an override (`--advertise` / `server.advertise_host`).
