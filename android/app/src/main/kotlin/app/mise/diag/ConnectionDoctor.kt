@@ -51,7 +51,7 @@ class ConnectionDoctor @Inject constructor(
         val s = settings.current()
         add(DiagStep(
             "This phone", DiagStep.Status.INFO,
-            "Mise ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · " +
+            "Mise ${BuildConfig.VERSION_NAME} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · " +
                 "${Build.MANUFACTURER} ${Build.MODEL}",
         ))
 

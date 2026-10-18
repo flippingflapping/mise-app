@@ -16,8 +16,10 @@ android {
         minSdk = 26
         targetSdk = 37
         // CI builds count up (GitHub run number) so each downloaded APK is a newer version.
-        versionCode = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull() ?: 1
-        versionName = "0.1.0"
+        val build = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull() ?: 1
+        versionCode = build
+        // Shows in App info and Settings, so you can tell which CI build is installed.
+        versionName = "0.1.0 (build $build)"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
