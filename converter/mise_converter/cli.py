@@ -15,7 +15,7 @@ from pathlib import Path
 from mise_shared.config import load_config
 
 from . import manifest as mf
-from .client import AnthropicClient
+from .backends import CHOICES, Backend, BackendUnavailable, resolve
 from .cost import estimate
 from .engine import Converter, RunReport, write_dry_run_requests
 from .prompt import system_prompt
@@ -24,6 +24,11 @@ from .prompt import system_prompt
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="convert", description="Convert raw recipes to Mise JSON with Claude.")
     p.add_argument("--config", help="path to config.toml (default: repo root, or $MISE_CONFIG)")
+    p.add_argument(
+        "--backend", choices=CHOICES,
+        help="who converts: api (ANTHROPIC_API_KEY), claude-code (Claude Code CLI with your Claude subscription), "
+             "or auto (default from config.toml: API key if set, else Claude Code)",
+    )
     sub = p.add_subparsers(dest="command", required=True)
 
     def common(sp: argparse.ArgumentParser) -> None:
@@ -60,12 +65,11 @@ def _confirm(question: str) -> bool:
         return False
 
 
-def _require_key() -> None:
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        sys.exit(
-            "ANTHROPIC_API_KEY is not set. Create a key at https://platform.claude.com/ and set it in this\n"
-            "terminal (PowerShell: $env:ANTHROPIC_API_KEY=\"sk-ant-...\"; macOS/Linux: export ANTHROPIC_API_KEY=sk-ant-...)."
-        )
+def _backend(conv: Converter, kind: str | None = None) -> Backend:
+    try:
+        return resolve(conv.cfg, kind or conv.backend_choice)
+    except BackendUnavailable as e:
+        sys.exit(str(e))
 
 
 def _summary(report: RunReport, conv: Converter) -> None:
@@ -85,18 +89,33 @@ def _summary(report: RunReport, conv: Converter) -> None:
 
 
 def _process(conv: Converter, docs, *, batch: bool | None, dry_run: bool, yes: bool, wait: bool) -> int:
+    try:
+        backend: Backend | None = resolve(conv.cfg, conv.backend_choice)
+    except BackendUnavailable as e:
+        if not dry_run:
+            sys.exit(str(e))
+        backend = None
     use_batch = conv.choose_batch(len(docs), batch)
-    est = estimate(docs, len(system_prompt()), conv.cfg.converter.pricing, batch=use_batch)
-    print(f"Model: {conv.cfg.converter.model} (effort {conv.cfg.converter.effort})")
+    if backend and not backend.supports_batch:
+        if batch:
+            print("Batch mode needs the API; Claude Code converts one recipe at a time instead.")
+        use_batch = False
+    model = (backend and backend.kind == "claude-code" and conv.cfg.converter.claude_code.model) or conv.cfg.converter.model
+    print(f"Converting with: {backend.label if backend else '(nothing set up yet)'}")
+    print(f"Model: {model} (effort {conv.cfg.converter.effort})")
     for d in docs:
         print(f"  • {d.key}")
-    print(est.describe())
+    if backend and backend.kind == "claude-code":
+        print(f"{len(docs)} recipe(s), one at a time (a minute or two each). Uses your Claude plan's usage limits; no API charges.")
+    else:
+        print(estimate(docs, len(system_prompt()), conv.cfg.converter.pricing, batch=use_batch).describe())
     if dry_run:
         path = conv.state_dir / "dry-run-requests.json"
         write_dry_run_requests(path, conv, docs)
         print(f"Dry run: nothing sent. The exact requests are in {path}")
         return 0
-    _require_key()
+    if backend and (problem := backend.login_problem()):
+        sys.exit(problem)
     if not yes and not _confirm("Go ahead?"):
         print("Cancelled.")
         return 1
@@ -116,9 +135,10 @@ def cmd_run(conv: Converter, args: argparse.Namespace) -> int:
         if args.dry_run:
             print(f"A batch is in flight ({b.id}); a real run would wait for it first.")
         else:
-            _require_key()
+            conv._client = _backend(conv, "api").factory()  # batches live on the API
             print(f"Resuming batch {b.id} (submitted {b.submitted_at}).")
             report = conv.collect_batch(wait=not args.no_wait)
+            conv._client = None  # new conversions use the configured backend
             _summary(report, conv)
             if report.still_running:
                 return 0
@@ -194,10 +214,11 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config(args.config)
     conv = Converter(
         cfg,
-        lambda: AnthropicClient(refusal_fallback=cfg.converter.refusal_fallback),
+        lambda: _backend(conv).factory(),
         inbox=args.inbox,
         out_dir=args.out,
     )
+    conv.backend_choice = args.backend
     conv.inbox.mkdir(parents=True, exist_ok=True)
     conv.out_dir.mkdir(parents=True, exist_ok=True)
     try:

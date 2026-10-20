@@ -29,6 +29,9 @@ DEFAULTS: dict[str, Any] = {
     "library": {"recipes_dir": "recipes"},
     "server": {"host": "0.0.0.0", "port": 8765, "token": "", "advertise_host": ""},
     "converter": {
+        # Who does the converting: "api" (ANTHROPIC_API_KEY, pay per use), "claude-code" (the Claude
+        # Code CLI logged in with your Claude subscription), or "auto" (API key if set, else Claude Code).
+        "backend": "auto",
         "inbox_dir": "inbox",
         "model": "claude-sonnet-5-5",
         "max_tokens": 32000,
@@ -37,6 +40,13 @@ DEFAULTS: dict[str, Any] = {
         "batch_threshold": 5,
         "refusal_fallback": True,
         "poll_seconds": 30,
+        "claude_code": {
+            # Name on PATH or full path of the Claude Code CLI.
+            "command": "claude",
+            # Empty = use `model` above. Aliases like "sonnet" or "opus" work too.
+            "model": "",
+            "timeout_seconds": 900,
+        },
         "pricing": {
             # USD per million tokens for the model above; check https://docs.claude.com pricing.
             "input_per_mtok": 2.0,
@@ -68,6 +78,13 @@ class Pricing:
 
 
 @dataclass
+class ClaudeCodeConfig:
+    command: str = "claude"
+    model: str = ""
+    timeout_seconds: int = 900
+
+
+@dataclass
 class ConverterConfig:
     inbox_dir: Path
     model: str
@@ -78,6 +95,8 @@ class ConverterConfig:
     refusal_fallback: bool
     poll_seconds: int
     pricing: Pricing
+    backend: str = "auto"
+    claude_code: ClaudeCodeConfig = field(default_factory=ClaudeCodeConfig)
 
 
 @dataclass
@@ -148,6 +167,12 @@ def load_config(explicit: str | Path | None = None, *, create: bool = True) -> C
             refusal_fallback=bool(c["refusal_fallback"]),
             poll_seconds=int(c["poll_seconds"]),
             pricing=Pricing(**pr),
+            backend=str(c.get("backend") or "auto").strip().lower(),
+            claude_code=ClaudeCodeConfig(
+                command=str(c["claude_code"].get("command") or "claude"),
+                model=str(c["claude_code"].get("model") or ""),
+                timeout_seconds=int(c["claude_code"].get("timeout_seconds") or 900),
+            ),
         ),
         raw=raw,
     )

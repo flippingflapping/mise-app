@@ -90,13 +90,20 @@ everything straight away.
 
 Short version (details in **[docs/converting.md](docs/converting.md)**):
 
-1. Get an API key at <https://platform.claude.com/> and set it **in the terminal you'll use**:
-   * Windows: `$env:ANTHROPIC_API_KEY = "sk-ant-..."`
-   * macOS / Linux: `export ANTHROPIC_API_KEY=sk-ant-...`
+1. Choose how to pay for the conversions (once):
+   * **Your Claude subscription (Pro/Max):** install [Claude Code](https://claude.com/claude-code),
+     run `claude` once in a terminal and log in with your Claude account. Nothing else to set:
+     conversions count towards your plan's usage limits, with no API charges.
+   * **Or an API key** (pay per use, and batch mode is half price): get one at
+     <https://platform.claude.com/> and set it **in the terminal you'll use**:
+     Windows `$env:ANTHROPIC_API_KEY = "sk-ant-..."`, macOS/Linux `export ANTHROPIC_API_KEY=sk-ant-...`
+
+   With both set up, the API key wins; to use the subscription anyway, add `--backend claude-code`
+   (or set `backend = "claude-code"` under `[converter]` in `config.toml`).
 2. Paste each recipe into its own `.txt` (or `.md`) file in the `inbox/` folder. Messy is fine.
 3. Run `powershell -ExecutionPolicy Bypass -File scripts\convert.ps1 run` (Windows) or
-   `scripts/convert.sh run` (macOS/Linux). It shows how
-   many recipes it will convert and a rough cost, and asks before sending anything.
+   `scripts/convert.sh run` (macOS/Linux). It shows how many recipes it will convert, how (and with
+   an API key, a rough cost), and asks before sending anything.
 4. Converted recipes appear in `recipes/`, and the running server picks them up immediately.
    Anything the converter wasn't sure about gets a **Needs review** badge in the app — open the recipe,
    read the *Check the conversion* card, compare with "View original text" if in doubt, and tap **Mark as reviewed**.
@@ -108,12 +115,13 @@ Running `convert run` again only converts new or changed files.
 Tap **Add recipe** in the library (or, in Chrome or any app, *Share → Add to Mise*), paste the recipe
 text and tap **Send to my PC**. The text is saved to `inbox/from-phone/` on the PC.
 
-* If the server was **started with `ANTHROPIC_API_KEY` set** in that terminal, it converts the recipe
-  straight away (one recipe at a time) and it appears in your library within a minute or so. The
-  server's start-up message says whether automatic conversion is on.
-* Without the key, the text just waits in the inbox until you next run `convert run`.
+* If the PC can convert (Claude Code logged in with your subscription, or the server **started with
+  `ANTHROPIC_API_KEY` set** in that terminal), it converts the recipe straight away (one at a time)
+  and it appears in your library within a minute or so. The server's start-up message says whether
+  automatic conversion is on, and with what.
+* Otherwise the text just waits in the inbox until you next run `convert run`.
 
-Either way the phone never sees the API key. Adding recipes needs the PC server (not folder mode).
+Either way the phone never sees any key or login. Adding recipes needs the PC server (not folder mode).
 
 ---
 
@@ -286,7 +294,10 @@ The server listens on TCP port **8765** (change `port` in `config.toml`).
   could in principle read recipe traffic (and the token); on a home network that's an acceptable
   trade-off for a recipe app. *(TODO in the code: optional HTTPS with a self-signed certificate.)*
 * The Claude API key is only read from the `ANTHROPIC_API_KEY` environment variable on the PC. It is
-  never written to disk, logged, or sent to the phone.
+  never written to disk, logged, or sent to the phone. With the Claude Code backend, Mise stores no
+  credentials at all: Claude Code uses its own login. Mise runs it with no tools, no CLAUDE.md,
+  plugins or MCP servers (`--tools "" --safe-mode`), and removes API keys from its environment so
+  your subscription is used, not the API.
 
 ---
 

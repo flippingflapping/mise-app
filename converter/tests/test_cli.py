@@ -3,8 +3,13 @@ import json
 from mise_converter.cli import main
 
 
+def no_claude_code(monkeypatch):
+    monkeypatch.setattr("mise_converter.backends.find_claude", lambda command: None)
+
+
 def test_dry_run_needs_no_key(workspace, monkeypatch, capsys):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    no_claude_code(monkeypatch)
     rc = main(["--config", str(workspace.path), "run", "--dry-run"])
     out = capsys.readouterr().out
     assert rc == 0
@@ -15,10 +20,11 @@ def test_dry_run_needs_no_key(workspace, monkeypatch, capsys):
 
 def test_run_without_key_exits_cleanly(workspace, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    no_claude_code(monkeypatch)
     try:
         main(["--config", str(workspace.path), "run", "--yes"])
     except SystemExit as e:
-        assert "ANTHROPIC_API_KEY" in str(e.code)
+        assert "ANTHROPIC_API_KEY" in str(e.code) and "Claude Code" in str(e.code)
     else:
         raise AssertionError("expected SystemExit")
 
@@ -27,3 +33,14 @@ def test_status_lists_pending(workspace, capsys):
     assert main(["--config", str(workspace.path), "status"]) == 0
     out = capsys.readouterr().out
     assert "lamb-curry-for-kothu.txt" in out and "pending" in out
+
+
+def test_dry_run_with_claude_code_shows_no_api_charges(workspace, monkeypatch, capsys):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-should-not-be-used")
+    monkeypatch.setattr("mise_converter.backends.find_claude", lambda command: "/usr/bin/claude")
+    rc = main(["--config", str(workspace.path), "--backend", "claude-code", "run", "--dry-run", "--batch"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Claude Code (your Claude subscription)" in out
+    assert "no API charges" in out and "roughly $" not in out
+    assert "Batch mode needs the API" in out

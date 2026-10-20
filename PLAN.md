@@ -343,3 +343,14 @@ time-efficient schedule (each dish's mise en place scheduled like a step, right 
 can fill other dishes' hands-off time), still shown as blocks but with exact times on each step and
 no separate prep block. Stored per plan (Room v4, `feasts.style`, default CALM); new plans default to
 the style of the most recently created plan, so no extra setting.
+
+**Converter backend: Claude Code CLI (subscription) as an alternative to the API.** New
+`converter.backend` = auto | api | claude-code (`--backend` on the command line). The claude-code
+backend runs `claude -p --output-format json --tools "" --no-session-persistence --safe-mode
+--system-prompt-file <tmp> --json-schema <schema> --model --effort`, recipe text on stdin, and reads
+`structured_output`. `--bare` is avoided because it ignores subscription logins; API credential
+variables (ANTHROPIC_API_KEY etc., which win over a login in print mode) are stripped from the child
+environment. Retries flatten the conversation into one prompt. No batch mode; one call at a time.
+Windows npm `.cmd` shims mangle JSON/`^` in arguments, so with a shim the schema goes in the prompt.
+`claude auth status` is checked up front. The server's phone imports use the same resolution.
+Verified with a real end-to-end conversion of the fixture (≈20 s, valid recipe).

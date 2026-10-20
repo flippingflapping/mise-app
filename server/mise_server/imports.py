@@ -1,14 +1,14 @@
 """Recipes added from the phone: saved to the inbox, then converted in the background.
 
-The phone never holds an API key, so conversion happens here — only if this server process has
-ANTHROPIC_API_KEY in its environment. Without it, the text just waits in the inbox for
+The phone never holds an API key, so conversion happens here — only if this PC can convert: with
+ANTHROPIC_API_KEY in the server's environment, or Claude Code logged in with a Claude subscription
+(see converter.backend in config.toml). Otherwise the text just waits in the inbox for
 `convert run`, exactly like a file you dropped there yourself.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 import queue
 import re
 import threading
@@ -73,8 +73,20 @@ class ImportQueue:
     ):
         self.cfg = cfg
         self.library = library
+        self.backend_label: str | None = None
+        if client_factory is None and can_convert is None:
+            from mise_converter.backends import BackendUnavailable, resolve
+
+            try:
+                backend = resolve(cfg)
+                if problem := backend.login_problem():
+                    log.warning("Can't convert recipes from the phone: %s", problem)
+                else:
+                    client_factory, self.backend_label = backend.factory, backend.label
+            except BackendUnavailable:
+                client_factory = None
         self._client_factory = client_factory
-        self.can_convert = bool(os.environ.get("ANTHROPIC_API_KEY")) if can_convert is None else can_convert
+        self.can_convert = (client_factory is not None) if can_convert is None else can_convert
         self._jobs: dict[str, ImportJob] = {}
         self._lock = threading.Lock()
         self._queue: queue.Queue[str] = queue.Queue()
@@ -145,12 +157,10 @@ class ImportQueue:
 
     def _convert(self, job: ImportJob) -> None:
         from mise_converter import manifest as mf
-        from mise_converter.client import AnthropicClient
         from mise_converter.engine import Converter
 
         self._set(job, status=CONVERTING)
-        factory = self._client_factory or (lambda: AnthropicClient(refusal_fallback=self.cfg.converter.refusal_fallback))
-        conv = Converter(self.cfg, factory, log=lambda m: log.info(m.strip()))
+        conv = Converter(self.cfg, self._client_factory, log=lambda m: log.info(m.strip()))
         docs, _ = conv.scan()
         doc = next((d for d in docs if d.key == job.filename), None)
         if doc is None:

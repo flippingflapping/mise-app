@@ -107,10 +107,10 @@ def main(argv: list[str] | None = None) -> int:
                 for c in others if not c.likely_virtual]
     imports = ImportQueue(cfg, library)
     if imports.can_convert:
-        print("  Recipes added from the app are converted automatically (ANTHROPIC_API_KEY is set).")
+        print(f"  Recipes added from the app are converted automatically with {imports.backend_label or 'Claude'}.")
     else:
-        print("  Recipes added from the app wait in the inbox until you run `convert run`")
-        print("  (set ANTHROPIC_API_KEY before starting the server to convert them automatically).")
+        print("  Recipes added from the app wait in the inbox until you run `convert run`. To convert them")
+        print("  automatically, log in to Claude Code (`claude`) or set ANTHROPIC_API_KEY, then restart.")
     app = create_app(library, cfg.server.token, pairing=pairing, imports=imports)
     uvicorn.run(app, host=cfg.server.host, port=port, log_level="info", access_log=False)
     return 0

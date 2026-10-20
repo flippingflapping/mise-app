@@ -9,13 +9,38 @@ In the commands below, `convert` means:
 * Windows: `powershell -ExecutionPolicy Bypass -File scripts\convert.ps1`
 * macOS / Linux: `scripts/convert.sh`
 
-## 1. One-time: an API key
+## 1. One-time: a Claude subscription or an API key
+
+Either works. `convert` tells you which one it's using before it sends anything.
+
+**A. Your Claude subscription (Pro/Max), through Claude Code**
+
+1. Install Claude Code: <https://claude.com/claude-code> (Windows: the native installer is best;
+   see the note below).
+2. Run `claude` once in a terminal and log in with your Claude account. Check with `claude auth status`.
+
+That's it. Conversions run through `claude -p` one recipe at a time (about 20 seconds to a couple
+of minutes each) and count towards your plan's usage limits. If you hit a limit, `convert` reports
+it and `convert retry` picks up where it stopped. No batch mode on this route.
+
+**B. An API key (pay per use)**
 
 1. Create a key at <https://platform.claude.com/> (Settings → API keys) and add some credit.
 2. Set it in the terminal you'll run the converter from (it's read from the environment only — never
    stored in a file):
    * Windows PowerShell: `$env:ANTHROPIC_API_KEY = "sk-ant-..."`
    * macOS / Linux: `export ANTHROPIC_API_KEY=sk-ant-...`
+
+With an API key you get a cost estimate first, and batch mode (half price) for bigger runs.
+
+**Which one is used:** `backend = "auto"` (the default) uses the API key when it's set, otherwise
+Claude Code. Force one with `convert --backend claude-code run` / `--backend api`, or set `backend`
+in `config.toml`. When Claude Code is used, Mise removes any API key from its environment, so it
+really uses your subscription.
+
+*Windows note:* if Claude Code was installed with npm, `claude` is a `.cmd` script that can mangle
+the JSON schema on the command line; Mise notices and puts the schema in the prompt instead (it
+still validates every answer). The native installer (`claude.exe`) avoids this.
 
 ## 2. Put recipes in the inbox
 
@@ -95,6 +120,7 @@ All in `config.toml` (created on first run, next to this project):
 
 ```toml
 [converter]
+backend = "auto"                 # auto | api | claude-code (see section 1)
 inbox_dir = "inbox"
 model = "claude-sonnet-5-5"      # current Sonnet; check https://docs.claude.com for newer models
 max_tokens = 32000
@@ -103,6 +129,11 @@ concurrency = 3                  # parallel requests in --sync mode
 batch_threshold = 5              # more pending recipes than this → batch mode
 refusal_fallback = true          # sync mode: let the API retry on a fallback model if it declines
 poll_seconds = 30
+
+[converter.claude_code]          # only for backend = claude-code
+command = "claude"               # name on PATH or a full path
+model = ""                       # empty = `model` above; aliases like "sonnet" / "opus" work
+timeout_seconds = 900
 
 [converter.pricing]              # USD per million tokens, used only for the estimate
 input_per_mtok = 2.0

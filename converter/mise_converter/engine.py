@@ -49,6 +49,8 @@ class Converter:
         self.state_dir = self.out_dir / ".mise"
         self.manifest = Manifest(self.state_dir / "manifest.json")
         self._client_factory = client_factory
+        #: --backend from the command line (None = config.toml's converter.backend).
+        self.backend_choice: str | None = None
         self._client: LLMClient | None = None
         self.log = log
         self.sleep = sleep
@@ -95,7 +97,8 @@ class Converter:
 
     def run_sync(self, docs: list[SourceDocument]) -> RunReport:
         report = RunReport()
-        workers = max(1, min(self.cfg.converter.concurrency, len(docs)))
+        limit = getattr(self.client, "max_concurrency", None) or self.cfg.converter.concurrency
+        workers = max(1, min(self.cfg.converter.concurrency, limit, len(docs)))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for doc, ok in zip(docs, pool.map(self._convert_one, docs)):
                 self._record(report, doc, ok)
