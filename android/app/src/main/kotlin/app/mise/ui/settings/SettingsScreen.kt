@@ -4,6 +4,8 @@ import androidx.core.net.toUri
 import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -124,7 +126,8 @@ fun SettingsScreen(
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 32.dp),
+            Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()
+                .verticalScroll(rememberScrollState()).padding(bottom = 32.dp),
         ) {
             Section("Recipes come from")
             Column(Modifier.selectableGroup()) {

@@ -1,5 +1,7 @@
 package app.mise.ui.plans
 
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -172,7 +174,7 @@ fun NewPlanScreen(viewModel: NewPlanViewModel, onBack: () -> Unit, onCreated: (L
             ) { Text(if (meal) "Make the plan" else "Make the list") }
         },
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 OutlinedTextField(
                     value = state.name, onValueChange = viewModel::setName, label = { Text("Name") },

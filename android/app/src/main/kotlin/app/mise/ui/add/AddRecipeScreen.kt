@@ -1,5 +1,7 @@
 package app.mise.ui.add
 
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -139,7 +141,8 @@ fun AddRecipeScreen(viewModel: AddRecipeViewModel, onBack: () -> Unit, onOpenRec
         )
     }) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
+            Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding() // stay above the keyboard
+                .verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (!state.usesPc) {
@@ -162,13 +165,16 @@ fun AddRecipeScreen(viewModel: AddRecipeViewModel, onBack: () -> Unit, onOpenRec
                 state.features?.canImport == false -> Notice(Icons.Outlined.ErrorOutline, "Update your PC server",
                     "This server is too old to accept recipes from the app. Download the latest version and restart it.")
                 state.features?.canConvert == false -> Notice(Icons.Outlined.Inbox, "It'll wait in the inbox",
-                    "Your PC server doesn't have an API key, so the text is saved to its inbox and converted next time you run " +
-                        "convert. (Start the server with ANTHROPIC_API_KEY set to convert straight away.)")
+                    "Your PC can't convert right now, so the text is saved to its inbox and converted next time you run " +
+                        "convert. (Log in to Claude Code on the PC, or set ANTHROPIC_API_KEY, then restart the server to " +
+                        "convert straight away.)")
             }
             OutlinedTextField(
                 value = state.text, onValueChange = viewModel::setText,
-                label = { Text("Recipe text") }, minLines = 10,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp),
+                label = { Text("Recipe text") },
+                // Long recipes scroll inside the box, so the fields and button below stay reachable.
+                minLines = 8, maxLines = 12,
+                modifier = Modifier.fillMaxWidth(),
             )
             if (state.text.isBlank()) {
                 TextButton(onClick = { clipboard.getText()?.text?.let(viewModel::setText) }) {

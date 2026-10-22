@@ -3,6 +3,7 @@ package app.mise.ui
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -235,6 +236,15 @@ class PlansScreensTest {
         assertThat(source.imports.single()).startsWith("Toast")
         compose.onNodeWithText("Open recipe").performClick()
         assertThat(opened).isEqualTo(id)
+    }
+
+    @Test fun longRecipeTextKeepsTheFieldsBelowOnScreen() {
+        val vm = AddRecipeViewModel(TestFixtures.lambRaw, null, repo, settings) // a full recipe, ~60 lines
+        show { AddRecipeScreen(vm, onBack = {}, onOpenRecipe = {}) }
+        waitFor("Send to my PC")
+        compose.onNodeWithText("Title (optional)").assertIsDisplayed()
+        compose.onNodeWithText("Send to my PC").assertIsDisplayed()
+        screenshot("add-recipe-long")
     }
 
     @Test fun addRecipeWithoutKeyWaitsInInbox() {

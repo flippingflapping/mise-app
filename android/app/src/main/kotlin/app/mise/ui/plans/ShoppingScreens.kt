@@ -2,6 +2,8 @@ package app.mise.ui.plans
 
 import android.content.Intent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -162,7 +164,7 @@ fun ShoppingListScreen(viewModel: ShoppingListViewModel, onBack: () -> Unit) {
         val d = detail ?: return@Scaffold
         val total = d.items.size
         val done = d.items.count { it.checked }
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 32.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding(), contentPadding = PaddingValues(bottom = 32.dp)) {
             item(key = "head") {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (d.recipes.isNotEmpty()) {
