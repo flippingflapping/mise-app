@@ -100,6 +100,44 @@ class ReviewFlag(_Strict):
     message: str = Field(min_length=1)
 
 
+class YieldEdit(_Strict):
+    base_servings: float = Field(gt=0)
+    label: Optional[str] = None
+
+
+class IngredientEdit(_Strict):
+    """The complete editable state of one ingredient (absent = none)."""
+
+    name: str = Field(min_length=1)
+    prep: Optional[str] = None
+    amount: Optional[float] = Field(default=None, gt=0)
+    amount_max: Optional[float] = Field(default=None, gt=0)
+    unit: Optional[Unit] = None
+    optional: Optional[bool] = None
+
+
+class StepEdit(_Strict):
+    title: str = Field(min_length=1)
+    timer_seconds: Optional[int] = Field(default=None, gt=0)
+    timer_max_seconds: Optional[int] = Field(default=None, gt=0)
+
+
+class Edits(_Strict):
+    """Corrections made in the app, applied on top of the converted recipe (see mise_shared.edits)."""
+
+    title: Optional[str] = Field(default=None, min_length=1)
+    yield_: Optional[YieldEdit] = Field(default=None, alias="yield")
+    ingredients: dict[str, IngredientEdit] = Field(default_factory=dict)
+    steps: dict[str, StepEdit] = Field(default_factory=dict)
+    checked_flags: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid", use_enum_values=True, populate_by_name=True)
+
+    @property
+    def is_empty(self) -> bool:
+        return not (self.title or self.yield_ or self.ingredients or self.steps or self.checked_flags)
+
+
 class UserData(_Strict):
     """Annotations merged into a served recipe (from <id>.user.json)."""
 
@@ -107,6 +145,7 @@ class UserData(_Strict):
     reviewed: Optional[bool] = None
     last_cooked: Optional[str] = None
     cook_log: Optional[list[str]] = None
+    edits: Optional[Edits] = None
     updated_at: Optional[str] = None
 
 
@@ -151,4 +190,6 @@ class Annotations(_Strict):
     cook_notes: Optional[list[str]] = None
     last_cooked: Optional[str] = None
     cook_log: Optional[list[str]] = None
+    #: Replaces all earlier edits when sent; {} clears them.
+    edits: Optional[Edits] = None
     updated_at: Optional[str] = None

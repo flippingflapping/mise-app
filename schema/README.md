@@ -84,6 +84,29 @@ Written by the server when the app saves annotations. Never touches `<id>.json`.
 On read the server merges it in: `cook_notes` replace the recipe's, `reviewed: true` sets
 `status` to `ready`, and the rest appears under `user`.
 
+### `edits`: corrections made in the app
+
+```json
+"edits": {
+  "title": "Lamb curry",
+  "yield": { "base_servings": 4, "label": "people" },
+  "ingredients": { "0009": { "name": "cinnamon sticks", "amount": 2 } },
+  "steps": { "s2": { "title": "Brown the lamb well", "timer_seconds": 360, "timer_max_seconds": 480 } },
+  "checked_flags": ["ingredients[8].amount"]
+}
+```
+
+Served under `user.edits` and **applied by the app**, not by the server: the served recipe stays as
+converted, so every edit can be undone. Ingredients and steps are keyed by id, and each entry is
+the complete editable state of that item: a missing `amount`/`unit`/`amount_max`/`prep` means none
+(e.g. "to taste", a countable, no range). Applying an edit to an ingredient whose `short_name`
+equals its `name` renames both. `checked_flags` lists the `review_flags` paths already checked in
+the guided review. The server rejects (422) edits that would make the recipe invalid; `"edits": {}`
+undoes them all. The same logic lives in `mise_shared/edits.py` and the app's `RecipeEditor`.
+
+This was an additive change (optional fields under `user`), so `schema_version` stays 1: older apps
+ignore it, and an older server refuses only the PUTs that carry edits.
+
 ## Evolving the schema
 
 1. Bump `schema_version` (and the `const`), document the change here.

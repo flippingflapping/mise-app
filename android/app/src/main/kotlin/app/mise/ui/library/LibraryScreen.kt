@@ -83,6 +83,8 @@ fun LibraryScreen(
     /** kind is "shopping" or "meal"; ids in the order picked. */
     onNewPlan: (kind: String, ids: List<String>) -> Unit = { _, _ -> },
     onConnectionCheck: () -> Unit = {},
+    /** The "Needs review" badge: straight to the guided review. */
+    onReview: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val picking = state.picked.isNotEmpty()
@@ -232,6 +234,7 @@ fun LibraryScreen(
                             picked = if (picking) item.id in state.picked else null,
                             onClick = { if (picking) viewModel.togglePick(item.id) else onOpen(item.id) },
                             onLongClick = { viewModel.togglePick(item.id) },
+                            onReview = if (picking) null else ({ onReview(item.id) }),
                         )
                         HorizontalDivider(Modifier.padding(start = 16.dp))
                     }
@@ -253,7 +256,14 @@ private fun SectionHeader(text: String) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RecipeRow(item: LibraryItem, selected: Boolean, picked: Boolean?, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun RecipeRow(
+    item: LibraryItem,
+    selected: Boolean,
+    picked: Boolean?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onReview: (() -> Unit)? = null,
+) {
     val needsReview = item.status == RecipeStatus.NEEDS_REVIEW
     ListItem(
         leadingContent = picked?.let { { Checkbox(checked = it, onCheckedChange = null) } },
@@ -262,7 +272,10 @@ private fun RecipeRow(item: LibraryItem, selected: Boolean, picked: Boolean?, on
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (needsReview) {
-                    Badge(containerColor = MaterialTheme.colorScheme.tertiaryContainer) {
+                    Badge(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        modifier = if (onReview != null) Modifier.clickable(onClickLabel = "check the conversion", onClick = onReview) else Modifier,
+                    ) {
                         Icon(Icons.Outlined.RateReview, null, Modifier.size(14.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("Needs review", Modifier.padding(vertical = 2.dp))

@@ -124,7 +124,59 @@
         "reviewed": { "type": "boolean" },
         "last_cooked": { "type": "string", "format": "date" },
         "cook_log": { "type": "array", "items": { "type": "string", "format": "date" } },
+        "edits": { "$ref": "#/$defs/edits" },
         "updated_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "edits": {
+      "description": "Your own corrections, made in the app and kept in <id>.user.json. The app applies them on top of the converted recipe (the recipe file is never changed), so they can be undone. Ingredients and steps are keyed by id; each entry holds the complete set of editable fields.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "yield": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["base_servings"],
+          "properties": {
+            "base_servings": { "type": "number", "exclusiveMinimum": 0 },
+            "label": { "type": "string" }
+          }
+        },
+        "ingredients": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[0-9]{4}$" },
+          "additionalProperties": { "$ref": "#/$defs/ingredient_edit" }
+        },
+        "steps": { "type": "object", "additionalProperties": { "$ref": "#/$defs/step_edit" } },
+        "checked_flags": {
+          "description": "Paths of review_flags already checked in the app's guided review.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "ingredient_edit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "prep": { "type": "string" },
+        "amount": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "amount_max": { "type": "number", "exclusiveMinimum": 0 },
+        "unit": { "$ref": "#/$defs/unit" },
+        "optional": { "type": "boolean" }
+      }
+    },
+    "step_edit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "timer_seconds": { "type": "integer", "exclusiveMinimum": 0 },
+        "timer_max_seconds": { "type": "integer", "exclusiveMinimum": 0 }
       }
     }
   }

@@ -1,0 +1,142 @@
+package app.mise.ui
+
+import android.graphics.Bitmap
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextReplacement
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.mise.TestFixtures
+import app.mise.core.model.RecipeStatus
+import app.mise.data.FakeSettings
+import app.mise.data.FakeSource
+import app.mise.data.db.MiseDatabase
+import app.mise.data.repo.RecipeRepository
+import app.mise.data.repo.SourceProvider
+import app.mise.data.settings.ThemeMode
+import app.mise.di.Clock
+import app.mise.ui.edit.EditRecipeScreen
+import app.mise.ui.edit.EditRecipeViewModel
+import app.mise.ui.edit.ReviewScreen
+import app.mise.ui.edit.ReviewViewModel
+import app.mise.ui.edit.excerpt
+import app.mise.ui.theme.MiseTheme
+import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
+
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "w400dp-h860dp-xhdpi")
+class RecipeEditScreensTest {
+    @get:Rule val compose = createComposeRule()
+
+    private lateinit var db: MiseDatabase
+    private lateinit var repo: RecipeRepository
+    private val source = FakeSource()
+    private val id = "sri-lankan-lamb-curry-for-kothu"
+
+    @Before fun setUp() {
+        val direct = java.util.concurrent.Executor { it.run() }
+        db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), MiseDatabase::class.java)
+            .allowMainThreadQueries().setQueryExecutor(direct).setTransactionExecutor(direct).build()
+        source.put(TestFixtures.lamb, "\"v1\"")
+        source.sourceText = TestFixtures.lambRaw
+        repo = RecipeRepository(
+            db, db.recipes(), db.annotations(), db.viewState(), db.sourceTexts(), FakeSettings(),
+            SourceProvider { source }, Clock { System.currentTimeMillis() }, CoroutineScope(Dispatchers.Unconfined),
+        )
+        runBlocking { repo.sync() }
+    }
+
+    @After fun tearDown() = db.close()
+
+    private fun show(content: @Composable () -> Unit) = compose.setContent { MiseTheme(ThemeMode.LIGHT) { content() } }
+
+    private fun waitFor(text: String, substring: Boolean = false) = compose.waitUntil(10_000) {
+        compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
+    }
+
+    private fun screenshot(name: String) {
+        compose.waitForIdle()
+        if (System.getProperty("mise.writeScreenshots") != "true") return
+        val dir = File(TestFixtures.repoRoot, "docs/screenshots").apply { mkdirs() }
+        val bmp = compose.onRoot().captureToImage().asAndroidBitmap()
+        File(dir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private fun recipe() = runBlocking { repo.detail(id).first()!! }
+
+    @Test fun editAnIngredientAndTheServings() {
+        val vm = EditRecipeViewModel(id, repo)
+        show { EditRecipeScreen(vm, onBack = {}) }
+        waitFor("Makes")
+        compose.onNodeWithText("2 portions of kothu").performClick()
+        compose.onNode(hasSetTextAction() and hasText("Makes")).performTextReplacement("4")
+        compose.onNodeWithText("Save").performClick()
+        compose.waitUntil(10_000) { recipe().recipe.recipeYield.baseServings == 4.0 }
+
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("minced ginger", substring = true))
+        compose.onNodeWithText("1 tsp minced ginger", substring = true).performClick()
+        compose.onNode(hasSetTextAction() and hasText("Amount")).performTextReplacement("1½")
+        compose.onNode(hasSetTextAction() and hasText("up to")).performTextReplacement("1")
+        compose.onNodeWithText("Save").performClick()
+        waitFor("The range must end above where it starts.") // explained, not saved
+        assertThat(recipe().edits.ingredients).isEmpty()
+        compose.onNode(hasSetTextAction() and hasText("up to")).performTextReplacement("2")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("The range must end above where it starts.").fetchSemanticsNodes().isEmpty() }
+        screenshot("edit-recipe")
+        compose.onNodeWithText("Save").performClick()
+        compose.waitUntil(10_000) { recipe().recipe.ingredient("0002")!!.amountMax == 2.0 }
+        assertThat(recipe().recipe.ingredient("0002")!!.amount).isEqualTo(1.5)
+        assertThat(recipe().original.ingredient("0002")!!.amount).isEqualTo(1.0)
+        waitFor("Edited")
+    }
+
+    @Test fun guidedReviewFixesTheFlaggedAmount() {
+        val vm = ReviewViewModel(id, repo)
+        var back = false
+        show { ReviewScreen(vm, onBack = { back = true }, onOriginal = {}, onEditAll = {}) }
+        waitFor("The converter wasn't sure:")
+        compose.onNodeWithText("1 of 1").assertExists()
+        compose.onNodeWithText("Looks right").assertExists()
+        waitFor("“2 9cm (3½in) cinnamon stick”") // what the original said, right there
+        compose.onNode(hasSetTextAction() and hasText("Amount")).performTextReplacement("2")
+        waitFor("Save & next")
+        screenshot("review")
+        compose.onNodeWithText("Save & next").performClick()
+        waitFor("All checked")
+        val d = recipe()
+        assertThat(d.recipe.ingredient("0009")!!.amount).isEqualTo(2.0)
+        assertThat(d.status).isEqualTo(RecipeStatus.READY)
+        compose.onNodeWithText("Back to the recipe").performClick()
+        assertThat(back).isTrue()
+    }
+
+    @Test fun excerptPrefersTheIngredientLine() {
+        val lines = excerpt(TestFixtures.lambRaw, listOf("cinnamon stick, 9cm (3½in)"))
+        assertThat(lines.first()).isEqualTo("2 9cm (3½in) cinnamon stick")
+        assertThat(lines.drop(1).all { it.length < 140 }).isTrue() // long method lines are cut down
+    }
+}

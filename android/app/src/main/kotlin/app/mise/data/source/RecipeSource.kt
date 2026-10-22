@@ -71,5 +71,5 @@ data class SourceCapabilities(
 
 /** A source failure, phrased for people. */
 class SourceException(val reason: Reason, message: String, cause: Throwable? = null) : Exception(message, cause) {
-    enum class Reason { UNREACHABLE, UNAUTHORIZED, NOT_FOUND, BAD_DATA, NOT_CONFIGURED, OTHER }
+    enum class Reason { UNREACHABLE, UNAUTHORIZED, NOT_FOUND, BAD_DATA, NOT_CONFIGURED, REJECTED, OTHER }
 }

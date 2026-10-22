@@ -105,8 +105,10 @@ Short version (details in **[docs/converting.md](docs/converting.md)**):
    `scripts/convert.sh run` (macOS/Linux). It shows how many recipes it will convert, how (and with
    an API key, a rough cost), and asks before sending anything.
 4. Converted recipes appear in `recipes/`, and the running server picks them up immediately.
-   Anything the converter wasn't sure about gets a **Needs review** badge in the app — open the recipe,
-   read the *Check the conversion* card, compare with "View original text" if in doubt, and tap **Mark as reviewed**.
+   Anything the converter wasn't sure about gets a **Needs review** badge in the app. Tap the badge
+   (or **Check them** on the recipe) to go through each doubt in turn: it shows what the converter
+   wasn't sure about, the matching line from your original text, and the item itself ready to fix.
+   **Looks right** or **Save & next**; when all are checked, the recipe counts as reviewed.
 
 Running `convert run` again only converts new or changed files.
 
@@ -138,6 +140,12 @@ Either way the phone never sees any key or login. Adding recipes needs the PC se
   it, or timers can only beep while the app is running.
 * **Cooking mode** (▶ Start cooking): one step per screen, huge text, swipe or big Back/Next
   buttons, the step's ingredients on top, screen stays on.
+* **Edit a recipe:** the ✏️ on a recipe. Tap any line to change it: the title, how many it makes,
+  each ingredient (amount or range like 1–2, unit, name, preparation, optional) and each step's
+  title and timer. Amounts in the steps, shopping lists and meal plans all follow your edits. Your
+  edits are kept separately from the converted recipe (in `recipes/<id>.user.json` on the PC), so
+  **Back to original** / **Undo all my edits** always work, and re-reading the recipe file never
+  loses them. (Changing step wording isn't in the app yet: edit `recipes/<id>.json` on the PC.)
 * **My notes:** your own notes per recipe, kept separate from the author's. They sync back to the PC
   (in `recipes/<id>.user.json`), as do favourites, "Mark as reviewed" and **I made this** (which feeds
   *Recently cooked*).

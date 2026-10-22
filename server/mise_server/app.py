@@ -159,6 +159,8 @@ def create_app(
             entry = library.save_annotations(rid, body)
         except KeyError:
             raise HTTPException(404, f"no recipe {rid!r}")
+        except ValueError as e:
+            raise HTTPException(422, f"those edits would break the recipe: {e}")
         return JSONResponse(entry.recipe, headers={"ETag": entry.etag})
 
     @app.post("/api/v1/recipes/import", dependencies=auth, status_code=202)

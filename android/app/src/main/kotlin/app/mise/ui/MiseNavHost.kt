@@ -31,6 +31,10 @@ import app.mise.ui.library.LibraryScreen
 import app.mise.ui.library.LibraryViewModel
 import app.mise.ui.original.OriginalTextScreen
 import app.mise.ui.original.OriginalTextViewModel
+import app.mise.ui.edit.EditRecipeScreen
+import app.mise.ui.edit.EditRecipeViewModel
+import app.mise.ui.edit.ReviewScreen
+import app.mise.ui.edit.ReviewViewModel
 import app.mise.ui.settings.ConnectionCheckScreen
 import app.mise.ui.settings.SettingsScreen
 import app.mise.ui.add.AddRecipeScreen
@@ -50,6 +54,8 @@ import kotlinx.serialization.Serializable
 @Serializable data class DetailRoute(val id: String)
 @Serializable data class CookingRoute(val id: String, val step: Int = 0)
 @Serializable data class OriginalRoute(val id: String)
+@Serializable data class EditRoute(val id: String)
+@Serializable data class ReviewRoute(val id: String)
 @Serializable data class SettingsRoute(val pairingLink: String? = null)
 @Serializable data object ConnectionCheckRoute
 @Serializable data class AddRecipeRoute(val text: String? = null, val subject: String? = null)
@@ -67,6 +73,7 @@ data class LibraryActions(
     val onMeals: () -> Unit = {},
     val onNewPlan: (kind: String, ids: List<String>) -> Unit = { _, _ -> },
     val onConnectionCheck: () -> Unit = {},
+    val onReview: (String) -> Unit = {},
 )
 
 /** Two panes (list + detail) at this width and above: tablets, unfolded foldables, landscape. */
@@ -105,6 +112,7 @@ fun MiseNavHost(launch: LaunchRequest?, onLaunchHandled: () -> Unit, nav: NavHos
                     onMeals = { nav.navigate(MealPlansRoute) },
                     onNewPlan = { kind, ids -> nav.navigate(NewPlanRoute(kind, ids.joinToString(","))) },
                     onConnectionCheck = { nav.navigate(ConnectionCheckRoute) },
+                    onReview = { nav.navigate(ReviewRoute(it)) },
                 ),
             ) { id, onSelect ->
                 val vm = hiltViewModel<RecipeDetailViewModel, RecipeDetailViewModel.Factory>(key = "pane-$id") { it.create(id) }
@@ -113,6 +121,8 @@ fun MiseNavHost(launch: LaunchRequest?, onLaunchHandled: () -> Unit, nav: NavHos
                     onCook = { step -> nav.navigate(CookingRoute(id, step)) },
                     onOriginal = { nav.navigate(OriginalRoute(id)) },
                     onOpenRecipe = onSelect,
+                    onEdit = { nav.navigate(EditRoute(id)) },
+                    onReview = { nav.navigate(ReviewRoute(id)) },
                 )
             }
         }
@@ -125,6 +135,21 @@ fun MiseNavHost(launch: LaunchRequest?, onLaunchHandled: () -> Unit, nav: NavHos
                 onCook = { step -> nav.navigate(CookingRoute(id, step)) },
                 onOriginal = { nav.navigate(OriginalRoute(id)) },
                 onOpenRecipe = { nav.navigate(DetailRoute(it)) },
+                onEdit = { nav.navigate(EditRoute(id)) },
+                onReview = { nav.navigate(ReviewRoute(id)) },
+            )
+        }
+        composable<EditRoute> { entry ->
+            val id = entry.toRoute<EditRoute>().id
+            EditRecipeScreen(hiltViewModel<EditRecipeViewModel, EditRecipeViewModel.Factory> { it.create(id) }, onBack = { nav.popBackStack() })
+        }
+        composable<ReviewRoute> { entry ->
+            val id = entry.toRoute<ReviewRoute>().id
+            ReviewScreen(
+                hiltViewModel<ReviewViewModel, ReviewViewModel.Factory> { it.create(id) },
+                onBack = { nav.popBackStack() },
+                onOriginal = { nav.navigate(OriginalRoute(id)) },
+                onEditAll = { nav.navigate(EditRoute(id)) { popUpTo<ReviewRoute> { inclusive = true } } },
             )
         }
         composable<CookingRoute> { entry ->
@@ -202,7 +227,8 @@ fun LibraryWithDetail(
             LibraryScreen(
                 libraryVm, selectedId = null, onOpen = onOpenFullScreen, onSettings = onSettings,
                 onAddRecipe = actions.onAddRecipe, onShoppingLists = actions.onShoppingLists,
-                onMeals = actions.onMeals, onNewPlan = actions.onNewPlan, onConnectionCheck = actions.onConnectionCheck,
+                onMeals = actions.onMeals, onNewPlan = actions.onNewPlan,
+                onConnectionCheck = actions.onConnectionCheck, onReview = actions.onReview,
             )
         } else {
             Row(Modifier.fillMaxSize()) {
@@ -212,7 +238,8 @@ fun LibraryWithDetail(
                     onSettings = onSettings,
                     modifier = Modifier.width((width * 0.38f).coerceAtLeast(320.dp)).fillMaxHeight(),
                     onAddRecipe = actions.onAddRecipe, onShoppingLists = actions.onShoppingLists,
-                    onMeals = actions.onMeals, onNewPlan = actions.onNewPlan, onConnectionCheck = actions.onConnectionCheck,
+                    onMeals = actions.onMeals, onNewPlan = actions.onNewPlan,
+                    onConnectionCheck = actions.onConnectionCheck, onReview = actions.onReview,
                 )
                 VerticalDivider()
                 val id = selected

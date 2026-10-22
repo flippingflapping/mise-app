@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
+import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -79,6 +80,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.mise.core.model.Ingredient
@@ -107,6 +109,8 @@ fun RecipeDetailScreen(
     onOriginal: () -> Unit,
     onOpenRecipe: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onEdit: () -> Unit = {},
+    onReview: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val image by viewModel.image.collectAsStateWithLifecycle()
@@ -132,6 +136,7 @@ fun RecipeDetailScreen(
                 },
                 actions = {
                     if (detail != null) {
+                        IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "Edit recipe") }
                         IconButton(onClick = viewModel::toggleFavorite) {
                             if (detail.favorite) Icon(Icons.Filled.Favorite, "Remove from favorites", tint = MaterialTheme.colorScheme.primary)
                             else Icon(Icons.Filled.FavoriteBorder, "Add to favorites")
@@ -185,7 +190,9 @@ fun RecipeDetailScreen(
             item(key = "header") { Header(recipe, state.servings, factor) }
             if (recipe.advancePrep.isNotEmpty()) item(key = "advance") { AdvancePrepBanner(recipe.advancePrep) }
             if (showFlags) {
-                item(key = "flags") { ReviewFlagsCard(recipe, viewModel::markReviewed, viewModel::dismissFlags) }
+                item(key = "flags") {
+                    ReviewFlagsCard(recipe, detail.edits.checkedFlags.size, onReview, viewModel::markReviewed, viewModel::dismissFlags)
+                }
             }
             item(key = "controls") {
                 Controls(
@@ -371,7 +378,7 @@ fun AdvancePrepBanner(items: List<String>, modifier: Modifier = Modifier, large:
 }
 
 @Composable
-private fun ReviewFlagsCard(recipe: Recipe, onReviewed: () -> Unit, onDismiss: () -> Unit) {
+private fun ReviewFlagsCard(recipe: Recipe, checked: Int, onReview: () -> Unit, onReviewed: () -> Unit, onDismiss: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -382,12 +389,20 @@ private fun ReviewFlagsCard(recipe: Recipe, onReviewed: () -> Unit, onDismiss: (
                 Spacer(Modifier.width(8.dp))
                 Text("Check the conversion", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-            Text("The converter wasn't sure about these:", style = MaterialTheme.typography.bodyMedium)
-            recipe.reviewFlags.forEach { f ->
-                Text("• ${f.message}", style = MaterialTheme.typography.bodyMedium)
+            val n = recipe.reviewFlags.size
+            Text(
+                "The converter wasn't sure about $n thing${if (n == 1) "" else "s"}" +
+                    (if (checked in 1 until n) " ($checked checked so far)" else "") +
+                    (if (n == 1) ". Check it, and fix it if it's off:" else ". Go through them one at a time and fix anything that's off:"),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            recipe.reviewFlags.take(3).forEach { f ->
+                Text("• ${f.message}", style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = onReviewed) { Text("Mark as reviewed") }
+            if (n > 3) Text("…and ${n - 3} more", style = MaterialTheme.typography.bodyMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = onReview) { Text(if (checked in 1 until n) "Carry on" else if (n == 1) "Check it" else "Check them") }
+                TextButton(onClick = onReviewed) { Text("All fine") }
                 TextButton(onClick = onDismiss) { Text("Hide") }
             }
         }

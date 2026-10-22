@@ -23,6 +23,8 @@ import io.ktor.http.contentType
 import io.ktor.http.encodeURLPathPart
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.IOException
 import java.time.Instant
 
@@ -129,13 +131,24 @@ class LanServerSource(
     }
 
     override suspend fun putAnnotations(id: String, a: Annotations) {
-        val body = RecipeJson.canonical.encodeToString(Annotations.serializer(), a.copy(updatedAt = null))
+        // No nulls: a PUT only changes the fields it sends, and an older server rejects fields it doesn't know.
+        val body = annotationsJson.encodeToString(Annotations.serializer(), a.copy(updatedAt = null))
         val resp = call {
             http.put("$api/recipes/${seg(id)}/annotations") {
                 auth()
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
+        }
+        if (resp.status == HttpStatusCode.UnprocessableEntity) {
+            val why = runCatching {
+                kotlinx.serialization.json.Json.parseToJsonElement(resp.bodyAsText())
+                    .jsonObject["detail"]?.jsonPrimitive?.content
+            }.getOrNull()
+            throw SourceException(
+                SourceException.Reason.REJECTED,
+                why ?: "The PC didn't accept the change. If you edited the recipe, update the PC server.",
+            )
         }
         ensureOk(resp)
         listCache = null
@@ -181,6 +194,8 @@ class LanServerSource(
     }
 
     companion object {
+        private val annotationsJson = kotlinx.serialization.json.Json { encodeDefaults = false; explicitNulls = false }
+
         /** "Can't reach your PC" plus the most likely cause, judged from the exception chain. */
         fun unreachableMessage(e: Throwable): String {
             val chain = generateSequence(e) { it.cause }.take(8).toList()

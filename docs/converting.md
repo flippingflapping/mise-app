@@ -90,10 +90,16 @@ Code then double-checks the result (it doesn't trust the model): the JSON schema
 amount placeholder in the steps points at a real ingredient, unique ids, sensible timers. Ingredients
 that no step uses get a flag too. Any recipe with flags is marked **Needs review** in the app.
 
-In the app, open the recipe, read the *Check the conversion* card, compare with **View original
-text**, and tap **Mark as reviewed**. To actually fix something, edit `recipes/<id>.json` in any text
-editor (field guide: [schema/README.md](../schema/README.md)) — the server reloads it instantly and skips
-it, with a log message, if you break it.
+In the app, tap the **Needs review** badge (or **Check them** on the recipe). Mise walks you through
+each doubt: the converter's note, the matching line from your original text, and that ingredient,
+step or serving count ready to fix. **Looks right** moves on; change something and it's **Save & next**.
+Once everything is checked the recipe counts as reviewed. Anything else can be changed any time with
+the ✏️ on the recipe. App edits are stored in `recipes/<id>.user.json` next to your notes, never in the
+converted file, so they can be undone.
+
+For changes the app can't make yet (step wording), edit `recipes/<id>.json` in any text editor (field
+guide: [schema/README.md](../schema/README.md)) — the server reloads it instantly and skips it, with a
+log message, if you break it.
 
 Your own scribbles from the pasted text ("try cumin seeds next time") end up in **My notes** in the
 app, not in the method.

@@ -196,3 +196,25 @@ def test_id_for_path(tmp_path):
     assert id_for_path(tmp_path / "abc.JPG") == "abc"
     assert id_for_path(tmp_path / ".tmp-123.json") is None
     assert id_for_path(tmp_path / "Bad Name.json") is None
+
+
+def test_edits_are_stored_served_and_validated(client, folder):
+    edits = {"yield": {"base_servings": 4}, "ingredients": {"0009": {"name": "cinnamon sticks", "amount": 2}},
+             "checked_flags": ["ingredients[8].amount"]}
+    r = client.put(f"/api/v1/recipes/{RID}/annotations", json={"edits": edits, "reviewed": True}, headers=AUTH)
+    assert r.status_code == 200
+    served = r.json()
+    assert served["user"]["edits"]["ingredients"]["0009"]["amount"] == 2
+    assert served["yield"]["base_servings"] == 2  # served as converted; the app applies the edits
+    side = json.loads((folder / f"{RID}.user.json").read_text(encoding="utf-8"))
+    assert side["edits"]["yield"] == {"base_servings": 4}  # stored by its JSON name, not yield_
+    assert client.get(f"/api/v1/recipes/{RID}", headers=AUTH).json()["user"]["edits"]["checked_flags"] == ["ingredients[8].amount"]
+
+    bad = {"edits": {"ingredients": {"0002": {"name": "ginger", "amount": 3, "amount_max": 1, "unit": "tsp"}}}}
+    r = client.put(f"/api/v1/recipes/{RID}/annotations", json=bad, headers=AUTH)
+    assert r.status_code == 422 and "less than amount" in r.text
+    # Other annotations leave the edits alone; {} clears them.
+    client.put(f"/api/v1/recipes/{RID}/annotations", json={"favorite": True}, headers=AUTH)
+    assert client.get(f"/api/v1/recipes/{RID}", headers=AUTH).json()["user"]["edits"]["yield"]["base_servings"] == 4
+    client.put(f"/api/v1/recipes/{RID}/annotations", json={"edits": {}}, headers=AUTH)
+    assert "edits" not in client.get(f"/api/v1/recipes/{RID}", headers=AUTH).json()["user"]

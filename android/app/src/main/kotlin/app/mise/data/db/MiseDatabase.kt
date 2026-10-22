@@ -11,7 +11,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ShoppingListEntity::class, ShoppingListRecipeEntity::class, ShoppingItemEntity::class,
         FeastEntity::class, FeastDishEntity::class, FeastDoneEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class MiseDatabase : RoomDatabase() {
@@ -24,7 +24,7 @@ abstract class MiseDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "mise.db"
-        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
     }
 }
 
@@ -56,5 +56,12 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
 val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE feasts ADD COLUMN style TEXT NOT NULL DEFAULT 'CALM'")
+    }
+}
+
+/** v5: my recipe edits (amounts, servings, timers…), kept with the other annotations. */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE annotations ADD COLUMN edits_json TEXT")
     }
 }

@@ -60,6 +60,15 @@ class LanServerSourceTest {
         val body = (req.body as TextContent).text
         assertThat(body).contains("\"favorite\":true")
         assertThat(body).contains("\"cook_notes\":[\"a\"]")
+        assertThat(body).doesNotContain("null") // an older server would reject fields it doesn't know, even null ones
+    }
+
+    @Test fun rejectedEditsSayWhy() = runTest {
+        val s = source { respond("""{"detail":"those edits would break the recipe: x"}""", HttpStatusCode.UnprocessableEntity, json) }
+        val e = runCatching { s.putAnnotations("x", Annotations(edits = app.mise.core.model.RecipeEdits(title = "t"))) }
+            .exceptionOrNull() as SourceException
+        assertThat(e.reason).isEqualTo(SourceException.Reason.REJECTED)
+        assertThat(e.message).contains("would break the recipe")
     }
 
     @Test fun mapsErrorsToFriendlyReasons() = runTest {

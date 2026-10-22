@@ -1,9 +1,14 @@
 package app.mise.data.repo
 
+import app.mise.core.edit.RecipeEditor
 import app.mise.core.model.Annotations
+import app.mise.core.model.IngredientEdit
 import app.mise.core.model.Recipe
+import app.mise.core.model.RecipeEdits
 import app.mise.core.model.RecipeJson
 import app.mise.core.model.RecipeStatus
+import app.mise.core.model.RecipeYield
+import app.mise.core.model.StepEdit
 import app.mise.core.units.UnitMode
 import app.mise.data.db.AnnotationDao
 import app.mise.data.db.AnnotationEntity
@@ -23,6 +28,9 @@ import app.mise.data.source.SourceException
 import app.mise.di.ApplicationScope
 import app.mise.di.Clock
 import androidx.room.withTransaction
+import java.time.LocalDate
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,9 +43,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
-import java.time.LocalDate
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Picks the source that feeds the library (bound to [app.mise.data.source.SourceFactory]). */
 fun interface SourceProvider {
@@ -54,13 +59,19 @@ data class LibraryItem(
     val lastCooked: String?,
 )
 
-/** A recipe as the detail screen sees it: cached recipe + my annotations + remembered view state. */
+/** A recipe as the detail screen sees it: cached recipe + my annotations (and edits) + remembered view state. */
 data class RecipeDetail(
-    val recipe: Recipe,
+    /** As converted, before my edits. */
+    val original: Recipe,
     val sourceKind: SourceKind,
     val annotation: AnnotationEntity?,
     val viewState: ViewStateEntity?,
 ) {
+    val edits: RecipeEdits get() = annotation?.editsJson?.let(::decodeEdits) ?: RecipeEdits()
+
+    /** With my edits applied: what every screen shows. */
+    val recipe: Recipe by lazy { RecipeEditor.apply(original, edits) }
+
     val favorite: Boolean get() = annotation?.favorite ?: false
     val status: RecipeStatus
         get() = if (annotation?.reviewed == true) RecipeStatus.READY else recipe.status
@@ -84,6 +95,9 @@ private val stringList = ListSerializer(String.serializer())
 internal fun decodeStrings(json: String): List<String> =
     runCatching { RecipeJson.lenient.decodeFromString(stringList, json) }.getOrDefault(emptyList())
 internal fun encodeStrings(list: List<String>): String = RecipeJson.canonical.encodeToString(stringList, list)
+internal fun decodeEdits(json: String): RecipeEdits? =
+    runCatching { RecipeJson.lenient.decodeFromString(RecipeEdits.serializer(), json) }.getOrNull()
+internal fun encodeEdits(edits: RecipeEdits): String = RecipeJson.canonical.encodeToString(RecipeEdits.serializer(), edits)
 
 /**
  * Offline-first: the UI only ever reads Room. [sync] pushes pending annotations, then pulls whatever
@@ -102,12 +116,17 @@ class RecipeRepository @Inject constructor(
     @ApplicationScope private val appScope: CoroutineScope,
 ) {
     private val syncMutex = Mutex()
+    private val _pushProblem = MutableStateFlow<String?>(null)
+    /** Why the PC last refused a change from this phone (it's kept here and retried), or null. */
+    val pushProblem: StateFlow<String?> = _pushProblem.asStateFlow()
+
     private val _status = MutableStateFlow(SyncStatus())
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
 
     // ------------------------------------------------------------------ reads
 
-    fun library(): Flow<List<LibraryItem>> = recipes.library().map { rows -> rows.map(::toItem) }
+    fun library(): Flow<List<LibraryItem>> =
+        recipes.library().map { rows -> rows.map(::toItem).sortedBy { it.title.lowercase() } }
 
     fun detail(id: String): Flow<RecipeDetail?> =
         combine(recipes.observe(id), annotations.observe(id), viewState.observe(id)) { r, a, v ->
@@ -116,7 +135,7 @@ class RecipeRepository @Inject constructor(
 
     private fun toItem(row: LibraryRow) = LibraryItem(
         id = row.id,
-        title = row.title,
+        title = row.editsJson?.let(::decodeEdits)?.title ?: row.title,
         tags = row.tags.split('\n').filter { it.isNotBlank() },
         ingredientNames = row.ingredientNames.split('\n').filter { it.isNotBlank() },
         status = if (row.reviewed == true) RecipeStatus.READY
@@ -206,6 +225,7 @@ class RecipeRepository @Inject constructor(
                         cookNotesJson = null, // the served recipe already has the merged cook_notes
                         lastCooked = user.lastCooked,
                         cookLogJson = encodeStrings(user.cookLog.orEmpty()),
+                        editsJson = user.edits?.takeUnless { it.isEmpty }?.let(::encodeEdits),
                     ),
                 )
             }
@@ -218,7 +238,15 @@ class RecipeRepository @Inject constructor(
         var pushed = 0
         for (a in annotations.dirty()) {
             if (recipes.get(a.recipeId) == null) continue
-            source.putAnnotations(a.recipeId, a.toAnnotations())
+            try {
+                source.putAnnotations(a.recipeId, a.toAnnotations())
+            } catch (e: SourceException) {
+                // One rejected change (e.g. edits an older PC server doesn't know) mustn't stop the rest
+                // syncing. It stays saved on the phone and is retried next time.
+                if (e.reason != SourceException.Reason.REJECTED) throw e
+                _pushProblem.value = e.message
+                continue
+            }
             annotations.update(a.recipeId) { cur ->
                 // Only clear dirty if nothing changed while the request was in flight.
                 if (cur.updatedAt == a.updatedAt) cur.copy(dirty = false) else cur
@@ -234,6 +262,7 @@ class RecipeRepository @Inject constructor(
         cookNotes = cookNotesJson?.let(::decodeStrings),
         lastCooked = lastCooked,
         cookLog = decodeStrings(cookLogJson),
+        edits = editsJson?.let(::decodeEdits),
     )
 
     /** Save locally now, push in the background (it's fine if the PC is off: next sync retries). */
@@ -260,6 +289,41 @@ class RecipeRepository @Inject constructor(
         val iso = date.toString()
         val log = (decodeStrings(it.cookLogJson) + iso).distinct().sorted()
         it.copy(lastCooked = log.last(), cookLogJson = encodeStrings(log))
+    }
+
+    // ------------------------------------------------------------------ edits
+
+    /** Change my edits of a recipe: saved on the phone now, pushed to the PC in the background. */
+    suspend fun updateEdits(id: String, change: (RecipeEdits) -> RecipeEdits) = annotate(id) {
+        val next = change(it.editsJson?.let(::decodeEdits) ?: RecipeEdits())
+        // "{}" (not null) so that undoing everything reaches the PC too.
+        it.copy(editsJson = encodeEdits(next))
+    }
+
+    /** Save one ingredient as edited, or put it back as converted (edit = null). */
+    suspend fun editIngredient(id: String, ingredientId: String, edit: IngredientEdit?) = updateEdits(id) {
+        it.copy(ingredients = if (edit == null) it.ingredients - ingredientId else it.ingredients + (ingredientId to edit))
+    }
+
+    suspend fun editStep(id: String, stepId: String, edit: StepEdit?) = updateEdits(id) {
+        it.copy(steps = if (edit == null) it.steps - stepId else it.steps + (stepId to edit))
+    }
+
+    suspend fun editServings(id: String, servings: RecipeYield?) = updateEdits(id) { it.copy(recipeYield = servings) }
+
+    suspend fun editTitle(id: String, title: String?) = updateEdits(id) { it.copy(title = title?.trim()?.ifEmpty { null }) }
+
+    /** Undo every edit of this recipe (review progress included). */
+    suspend fun resetEdits(id: String) = updateEdits(id) { RecipeEdits() }
+
+    /** Guided review: mark one flag as checked; when all are, the recipe counts as reviewed. */
+    suspend fun checkFlag(id: String, path: String, allPaths: Collection<String>) = annotate(id) { a ->
+        val edits = a.editsJson?.let(::decodeEdits) ?: RecipeEdits()
+        val checked = (edits.checkedFlags + path).distinct()
+        a.copy(
+            editsJson = encodeEdits(edits.copy(checkedFlags = checked)),
+            reviewed = if (checked.containsAll(allPaths)) true else a.reviewed,
+        )
     }
 
     /** Local only: hide the review banner on this phone. */
@@ -309,6 +373,11 @@ class RecipeRepository @Inject constructor(
         runCatching { sources.source(settings.current()).importStatus(jobId) }
 
     /** Decoded recipes, for planning features (shopping lists, feasts). */
-    suspend fun recipesById(ids: Collection<String>): Map<String, Recipe> =
-        ids.mapNotNull { id -> recipes.get(id)?.let { id to RecipeJson.decodeRecipe(it.json) } }.toMap()
+    /** Recipes with my edits applied (shopping lists and meal plans use the edited amounts). */
+    suspend fun recipesById(ids: Collection<String>): Map<String, Recipe> = ids.mapNotNull { id ->
+        recipes.get(id)?.let { row ->
+            val edits = annotations.get(id)?.editsJson?.let(::decodeEdits)
+            id to RecipeEditor.apply(RecipeJson.decodeRecipe(row.json), edits)
+        }
+    }.toMap()
 }

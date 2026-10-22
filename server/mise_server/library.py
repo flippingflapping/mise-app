@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from mise_shared.edits import edit_errors
 from mise_shared.models import Annotations
 from mise_shared.util import now_iso, write_json_atomic
 from mise_shared.validation import validate_recipe
@@ -167,6 +168,8 @@ class RecipeLibrary:
                 "reviewed": a.reviewed,
                 "last_cooked": a.last_cooked,
                 "cook_log": a.cook_log,
+                # Passed through, not applied: the app applies them, so it can also undo them.
+                "edits": a.edits.model_dump(mode="json", by_alias=True, exclude_none=True) if a.edits else None,
                 "updated_at": a.updated_at,
             }.items()
             if v is not None
@@ -218,16 +221,26 @@ class RecipeLibrary:
     # ------------------------------------------------------------------ writes
 
     def save_annotations(self, rid: str, update: Annotations) -> LibraryEntry:
-        """Merge the fields present in `update` into <id>.user.json. The recipe file is untouched."""
+        """Merge the fields present in `update` into <id>.user.json. The recipe file is untouched.
+
+        Raises ValueError if the edits would make the recipe invalid (e.g. a range that ends below
+        where it starts), with the problems in the message.
+        """
         with self._lock:
             if rid not in self._entries:
                 raise KeyError(rid)
+            if update.edits is not None:
+                base = json.loads((self.folder / f"{rid}.json").read_text(encoding="utf-8"))
+                if problems := edit_errors(base, update.edits):
+                    raise ValueError("; ".join(problems[:5]))
             current = self._read_sidecar(rid) or Annotations()
-            data = current.model_dump(exclude_none=True)
-            data.update(update.model_dump(exclude_unset=True, exclude_none=True))
+            data = current.model_dump(mode="json", by_alias=True, exclude_none=True)
+            data.update(update.model_dump(mode="json", by_alias=True, exclude_unset=True, exclude_none=True))
+            if update.edits is not None and update.edits.is_empty:
+                data.pop("edits", None)  # {} = undo all edits
             data["updated_at"] = now_iso()
             new = Annotations.model_validate(data)
-            write_json_atomic(self.folder / f"{rid}.user.json", new.model_dump(exclude_none=True))
+            write_json_atomic(self.folder / f"{rid}.user.json", new.model_dump(mode="json", by_alias=True, exclude_none=True))
             self.reload([rid])
             entry = self._entries.get(rid)
             if entry is None:  # pragma: no cover - the recipe was removed concurrently

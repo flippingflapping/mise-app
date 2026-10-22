@@ -48,6 +48,8 @@ data class AnnotationEntity(
     @ColumnInfo(name = "cook_log_json") val cookLogJson: String = "[]",
     /** Review-flag banner dismissed on this phone (not synced). */
     @ColumnInfo(name = "flags_dismissed") val flagsDismissed: Boolean = false,
+    /** My recipe edits ([app.mise.core.model.RecipeEdits] JSON); null = none. "{}" = undone, still to be pushed. */
+    @ColumnInfo(name = "edits_json") val editsJson: String? = null,
     /** Has local changes not yet pushed to the source. */
     val dirty: Boolean = false,
     @ColumnInfo(name = "updated_at") val updatedAt: Long = 0,

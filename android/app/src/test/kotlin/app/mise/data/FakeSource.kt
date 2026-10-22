@@ -21,6 +21,8 @@ class FakeSource(
     val gets = mutableListOf<String>()
     val puts = mutableListOf<Pair<String, Annotations>>()
     var unreachable = false
+    /** Recipe ids whose annotation PUTs the "server" refuses (422), like an older server seeing edits. */
+    val rejecting = mutableSetOf<String>()
 
     override val capabilities = SourceCapabilities(
         readOnly = !supportsAnnotations, supportsAnnotations = supportsAnnotations,
@@ -44,7 +46,10 @@ class FakeSource(
         return recipes[id]?.first ?: throw SourceException(SourceException.Reason.NOT_FOUND, "nope")
     }
 
-    override suspend fun getSourceText(id: String): String? = "raw text of $id"
+    /** The original text; null = "raw text of <id>". */
+    var sourceText: String? = null
+
+    override suspend fun getSourceText(id: String): String? = sourceText ?: "raw text of $id"
 
     var features = app.mise.data.source.ServerFeatures(canImport = true, canConvert = true)
     val imports = mutableListOf<String>()
@@ -67,6 +72,7 @@ class FakeSource(
     override suspend fun putAnnotations(id: String, a: Annotations) {
         check()
         if (!capabilities.supportsAnnotations) throw UnsupportedOperationException()
+        if (id in rejecting) throw SourceException(SourceException.Reason.REJECTED, "update the PC server")
         puts += id to a
     }
 }

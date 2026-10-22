@@ -16,6 +16,7 @@ data class LibraryRow(
     val favorite: Boolean?,
     val reviewed: Boolean?,
     val lastCooked: String?,
+    val editsJson: String? = null,
 )
 
 @Dao
@@ -23,7 +24,7 @@ interface RecipeDao {
     @Query(
         """
         SELECT r.id, r.title, r.tags, r.ingredient_names AS ingredientNames, r.status,
-               a.favorite, a.reviewed, a.last_cooked AS lastCooked
+               a.favorite, a.reviewed, a.last_cooked AS lastCooked, a.edits_json AS editsJson
         FROM recipes r LEFT JOIN annotations a ON a.recipe_id = r.id
         ORDER BY r.title COLLATE NOCASE
         """,

@@ -8,6 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import app.mise.data.db.MIGRATION_1_2
 import app.mise.data.db.MIGRATION_2_3
 import app.mise.data.db.MIGRATION_3_4
+import app.mise.data.db.MIGRATION_4_5
 import app.mise.data.db.FeastDishEntity
 import app.mise.data.db.FeastEntity
 import app.mise.data.db.ShoppingItemEntity
@@ -121,6 +122,24 @@ class MigrationTest {
     @Test
     fun migrateAllTheWayFromV1() {
         helper.createDatabase(dbName, 1).close()
-        helper.runMigrationsAndValidate(dbName, 4, true, *MiseDatabase.MIGRATIONS).close()
+        helper.runMigrationsAndValidate(dbName, 5, true, *MiseDatabase.MIGRATIONS).close()
+    }
+
+    @Test
+    fun migrate4To5AddsEdits() = runTest {
+        helper.createDatabase(dbName, 4).apply {
+            execSQL("INSERT INTO annotations (recipe_id, favorite, cook_log_json, flags_dismissed, dirty, updated_at) VALUES ('r1', 1, '[]', 0, 0, 0)")
+            close()
+        }
+        helper.runMigrationsAndValidate(dbName, 5, true, MIGRATION_4_5).close()
+        val room = Room.databaseBuilder(ApplicationProvider.getApplicationContext(), MiseDatabase::class.java, dbName)
+            .addMigrations(*MiseDatabase.MIGRATIONS).allowMainThreadQueries().build()
+        try {
+            val a = room.annotations().get("r1")!!
+            assertThat(a.favorite).isTrue()
+            assertThat(a.editsJson).isNull()
+        } finally {
+            room.close()
+        }
     }
 }

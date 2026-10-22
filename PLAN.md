@@ -354,3 +354,17 @@ environment. Retries flatten the conversation into one prompt. No batch mode; on
 Windows npm `.cmd` shims mangle JSON/`^` in arguments, so with a shim the schema goes in the prompt.
 `claude auth status` is checked up front. The server's phone imports use the same resolution.
 Verified with a real end-to-end conversion of the fixture (≈20 s, valid recipe).
+
+**Recipe editing and guided review** (after first use). Edits live in the `<id>.user.json` sidecar as
+`edits` (title, yield, ingredients and steps by id with their full editable state, checked review
+flags), served under `user.edits` and applied by the app (`RecipeEditor`, mirrored by
+`mise_shared/edits.py` for validation on the PC: a PUT whose edits would break the recipe gets 422).
+Why not rewrite the recipe JSON: edits stay undoable, a re-read/re-convert of the file doesn't wipe
+them silently, they work offline and in folder mode (phone-only there), and sync reuses the
+annotation path. Everything that reads recipes (detail, cooking, shopping lists, meal plans, library
+titles) sees the edited version. Room v5 adds `annotations.edits_json`. Annotation PUTs no longer send
+null fields, and a rejected PUT (e.g. edits sent to an older server) is skipped and retried instead
+of failing the whole sync. The guided review maps each review flag's path (`ingredients[8].amount`,
+`steps[3]…`, `yield…`) to the item, shows the converter's note, the best-matching lines of the original
+text and an editor for that item; checking every flag marks the recipe reviewed. Not editable in the
+app yet: step wording (placeholders make free-text editing error-prone), adding/removing ingredients.

@@ -4,7 +4,10 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.mise.TestFixtures
+import app.mise.core.edit.RecipeEditor
+import app.mise.core.model.RecipeEdits
 import app.mise.core.model.RecipeStatus
+import app.mise.core.model.RecipeYield
 import app.mise.core.model.UserData
 import app.mise.data.db.MiseDatabase
 import app.mise.data.repo.RecipeRepository
@@ -180,5 +183,55 @@ class RecipeRepositoryTest {
         assertThat(repo.syncIfStale()).isNull()
         now += 120_000
         assertThat(repo.syncIfStale()).isNotNull()
+    }
+
+    @Test fun editsApplyEverywhereAndSyncBothWays() = runTest {
+        repo.sync()
+        val cinnamon = TestFixtures.lamb.ingredient("0009")!!
+        repo.editIngredient(id, "0009", RecipeEditor.editOf(cinnamon).copy(amount = 2.0, name = "cinnamon sticks"))
+        repo.editServings(id, RecipeYield(4.0, "people"))
+
+        val d = repo.detail(id).first()!!
+        assertThat(d.original.ingredient("0009")!!.amount).isEqualTo(1.0) // the conversion is kept
+        assertThat(d.recipe.ingredient("0009")!!.amount).isEqualTo(2.0)
+        assertThat(d.recipe.recipeYield.baseServings).isEqualTo(4.0)
+        assertThat(repo.recipesById(listOf(id))[id]!!.ingredient("0009")!!.name).isEqualTo("cinnamon sticks") // shopping & plans
+        repo.sync()
+        val pushed = source.puts.last().second.edits!!
+        assertThat(pushed.ingredients["0009"]!!.amount).isEqualTo(2.0)
+
+        // Undo one, then all: "{}" goes to the PC so it forgets them too.
+        repo.editIngredient(id, "0009", null)
+        assertThat(repo.detail(id).first()!!.recipe.ingredient("0009")!!.amount).isEqualTo(1.0)
+        repo.resetEdits(id)
+        repo.sync() // pushes run in the background; a sync sends anything still pending
+        assertThat(source.puts.last().second.edits).isEqualTo(RecipeEdits())
+
+        // Edits made on another phone arrive with the recipe.
+        val fromPc = RecipeEdits(title = "Kothu curry")
+        source.put(TestFixtures.lamb.copy(user = UserData(edits = fromPc)), "\"v2\"")
+        repo.sync()
+        assertThat(repo.detail(id).first()!!.recipe.title).isEqualTo("Kothu curry")
+        assertThat(repo.library().first().single().title).isEqualTo("Kothu curry")
+    }
+
+    @Test fun checkingEveryFlagMarksTheRecipeReviewed() = runTest {
+        repo.sync()
+        val paths = TestFixtures.lamb.reviewFlags.map { it.path }
+        repo.checkFlag(id, paths.single(), paths)
+        val d = repo.detail(id).first()!!
+        assertThat(d.edits.checkedFlags).containsExactlyElementsIn(paths)
+        assertThat(d.status).isEqualTo(RecipeStatus.READY)
+    }
+
+    @Test fun aRejectedChangeDoesNotBlockSyncing() = runTest {
+        repo.sync()
+        source.rejecting += id
+        repo.editTitle(id, "Mine")
+        val result = repo.sync()
+        assertThat(result).isInstanceOf(SyncResult.Success::class.java)
+        assertThat(repo.pushProblem.value).contains("update the PC server")
+        assertThat(repo.detail(id).first()!!.recipe.title).isEqualTo("Mine") // still saved on the phone
+        assertThat(db.annotations().get(id)!!.dirty).isTrue() // and retried next time
     }
 }

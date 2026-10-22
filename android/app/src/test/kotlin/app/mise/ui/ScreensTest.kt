@@ -126,6 +126,7 @@ class ScreensTest {
             runCatching { compose.onNode(hasScrollAction()).performScrollToNode(hasText("1⅝ lb")) }.isSuccess
         }
         compose.onNodeWithText("1⅝ lb").assertIsDisplayed() // 750 g lamb
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Metric"))
         compose.onNodeWithText("Metric").performClick()
         compose.waitUntil(10_000) {
             runCatching { compose.onNode(hasScrollAction()).performScrollToNode(hasText("750 g")) }.isSuccess
@@ -147,8 +148,8 @@ class ScreensTest {
 
     @Test fun markAsReviewed() {
         show { Detail(detailVm()) }
-        waitFor("Mark as reviewed")
-        compose.onNodeWithText("Mark as reviewed").performClick()
+        waitFor("All fine")
+        compose.onNodeWithText("All fine").performClick()
         waitGone("Check the conversion")
         assertThat(runBlocking { db.annotations().get(id)?.reviewed }).isTrue()
     }
@@ -163,7 +164,7 @@ class ScreensTest {
         waitFor("Serves 2 portions of kothu")
         assertThat(vm.scaleBy("0001", 400.0, app.mise.core.model.MeasureUnit.G)).isTrue()
         waitFor("Serves 1.6 portions of kothu (recipe makes 2)")
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText("400 g"))
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Reset"))
         compose.onNodeWithText("Reset").performClick()
         waitFor("Serves 2 portions of kothu")
     }

@@ -148,7 +148,43 @@ data class UserData(
     val reviewed: Boolean? = null,
     @SerialName("last_cooked") val lastCooked: String? = null,
     @SerialName("cook_log") val cookLog: List<String>? = null,
+    val edits: RecipeEdits? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+/**
+ * Corrections made in the app (schema `$defs.edits`). Applied on top of the converted recipe by
+ * [app.mise.core.edit.RecipeEditor], never written into it, so they can be undone. Ingredients and
+ * steps are keyed by id; each entry is the complete editable state of that item.
+ */
+@Serializable
+data class RecipeEdits(
+    val title: String? = null,
+    @SerialName("yield") val recipeYield: RecipeYield? = null,
+    val ingredients: Map<String, IngredientEdit> = emptyMap(),
+    val steps: Map<String, StepEdit> = emptyMap(),
+    /** Paths of review flags already checked in the guided review. */
+    @SerialName("checked_flags") val checkedFlags: List<String> = emptyList(),
+) {
+    val isEmpty: Boolean
+        get() = title == null && recipeYield == null && ingredients.isEmpty() && steps.isEmpty() && checkedFlags.isEmpty()
+}
+
+@Serializable
+data class IngredientEdit(
+    val name: String,
+    val prep: String? = null,
+    val amount: Double? = null,
+    @SerialName("amount_max") val amountMax: Double? = null,
+    val unit: MeasureUnit? = null,
+    val optional: Boolean = false,
+)
+
+@Serializable
+data class StepEdit(
+    val title: String,
+    @SerialName("timer_seconds") val timerSeconds: Int? = null,
+    @SerialName("timer_max_seconds") val timerMaxSeconds: Int? = null,
 )
 
 /** Body of `PUT /recipes/{id}/annotations`, and the sidecar format. */
@@ -159,6 +195,8 @@ data class Annotations(
     @SerialName("cook_notes") val cookNotes: List<String>? = null,
     @SerialName("last_cooked") val lastCooked: String? = null,
     @SerialName("cook_log") val cookLog: List<String>? = null,
+    /** Replaces all earlier edits when sent; an empty object undoes them. null = leave as they are. */
+    val edits: RecipeEdits? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
 )
 
