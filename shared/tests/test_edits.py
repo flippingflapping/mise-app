@@ -52,3 +52,23 @@ def test_edits_in_user_data_match_schema_and_models():
     assert Recipe.model_validate(served).user.edits.ingredients["0009"].amount == 2
     a = Annotations.model_validate({"edits": EDITS})
     assert a.model_dump(mode="json", by_alias=True, exclude_none=True)["edits"]["yield"]["base_servings"] == 4
+
+
+def test_add_and_remove_ingredients_and_reword_steps():
+    s2 = next(s for s in RECIPE["steps"] if s["id"] == "s2")
+    edits = {
+        "removed_ingredients": ["0001"],
+        "added_ingredients": [{"id": "9001", "name": "chicken thighs", "short_name": "chicken", "amount": 600, "unit": "g"}],
+        "steps": {"s2": {"title": "Brown the chicken", "content": "Heat {0007}, add {9001} and brown it."}},
+    }
+    # The lamb is still used by other steps, so this alone breaks the recipe…
+    assert any("unknown ingredient" in e for e in edit_errors(RECIPE, edits))
+    # …until every step that mentions it is reworded (the app does this when removing).
+    for step in RECIPE["steps"]:
+        if "{0001" in step["content"] and step["id"] != "s2":
+            edits["steps"][step["id"]] = {"title": step["title"], "content": step["content"].replace("{0001}", "lamb").replace("{0001:name}", "lamb")}
+    assert edit_errors(RECIPE, edits) == []
+    out = apply_edits(RECIPE, edits)
+    assert [i["id"] for i in out["ingredients"]][-1] == "9001" and "0001" not in [i["id"] for i in out["ingredients"]]
+    assert next(s for s in out["steps"] if s["id"] == "s2")["content"] == "Heat {0007}, add {9001} and brown it."
+    assert s2["content"] != "Heat {0007}, add {9001} and brown it."  # original untouched

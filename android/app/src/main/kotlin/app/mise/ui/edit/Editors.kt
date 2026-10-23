@@ -1,12 +1,17 @@
 package app.mise.ui.edit
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -28,9 +33,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.mise.core.edit.RecipeEditor
+import app.mise.core.edit.StepText
 import app.mise.core.model.Ingredient
 import app.mise.core.model.IngredientEdit
 import app.mise.core.model.MeasureUnit
+import app.mise.core.model.Recipe
 import app.mise.core.model.RecipeYield
 import app.mise.core.model.Step
 import app.mise.core.model.StepEdit
@@ -126,11 +133,31 @@ private fun UnitPicker(unit: MeasureUnit?, onPick: (MeasureUnit?) -> Unit) {
     }
 }
 
+/**
+ * What the person has typed for one step. [original] is the step as converted: new wording is only
+ * stored when it differs from that.
+ */
 @Stable
-class StepDraft(start: StepEdit) {
-    var title by mutableStateOf(start.title)
-    var timer by mutableStateOf(start.timerSeconds?.let { minutesText(it) }.orEmpty())
-    var timerMax by mutableStateOf(start.timerMaxSeconds?.let { minutesText(it) }.orEmpty())
+class StepDraft(step: Step, private val recipe: Recipe, private val original: Step?) {
+    private val startTitle = step.title
+    private val startTimer = step.timerSeconds?.let { minutesText(it) }.orEmpty()
+    private val startTimerMax = step.timerMaxSeconds?.let { minutesText(it) }.orEmpty()
+    private val startWording = StepText.toEditable(step.content, recipe)
+
+    var title by mutableStateOf(startTitle)
+    var timer by mutableStateOf(startTimer)
+    var timerMax by mutableStateOf(startTimerMax)
+    var wording by mutableStateOf(startWording)
+
+    val isChanged: Boolean
+        get() = title != startTitle || timer != startTimer || timerMax != startTimerMax || wording != startWording
+
+    /** The ingredient names that can go in {braces}. */
+    val names: List<String> get() = StepText.labels(recipe).values.toList()
+
+    fun insert(name: String) {
+        wording = wording.trimEnd() + (if (wording.isBlank()) "" else " ") + "{$name}"
+    }
 
     fun result(): Pair<StepEdit?, List<String>> {
         val problems = mutableListOf<String>()
@@ -138,7 +165,14 @@ class StepDraft(start: StepEdit) {
         if (timer.isNotBlank() && t == null) problems += "“$timer” isn't a number of minutes."
         val m = RecipeEditor.parseAmount(timerMax)
         if (timerMax.isNotBlank() && m == null) problems += "“$timerMax” isn't a number of minutes."
-        val edit = StepEdit(title.trim(), t?.let { (it * 60).toInt() }, m?.let { (it * 60).toInt() })
+        val content = when (val parsed = StepText.fromEditable(wording, recipe)) {
+            is StepText.Parsed.Ok -> parsed.content
+            is StepText.Parsed.Problem -> { problems += parsed.message; null }
+        }
+        val edit = StepEdit(
+            title.trim(), t?.let { (it * 60).toInt() }, m?.let { (it * 60).toInt() },
+            content = content?.takeIf { it != original?.content },
+        )
         problems += RecipeEditor.problems(edit)
         return (if (problems.isEmpty()) edit else null) to problems
     }
@@ -149,12 +183,27 @@ class StepDraft(start: StepEdit) {
 }
 
 @Composable
-fun StepEditor(draft: StepDraft, problems: List<String>, content: String?, modifier: Modifier = Modifier) {
+fun StepEditor(draft: StepDraft, problems: List<String>, label: String?, modifier: Modifier = Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        label?.let { Text(it, style = MaterialTheme.typography.labelLarge) }
         OutlinedTextField(
             value = draft.title, onValueChange = { draft.title = it }, label = { Text("Step title") },
             singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
+        OutlinedTextField(
+            value = draft.wording, onValueChange = { draft.wording = it }, label = { Text("What to do") },
+            minLines = 3, maxLines = 10, modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            "{lamb} shows the amount and name, and scales with the servings; [lamb] shows just the name. " +
+                "Tap an ingredient to add it:",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            draft.names.forEach { name ->
+                AssistChip(onClick = { draft.insert(name) }, label = { Text(name) })
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = draft.timer, onValueChange = { draft.timer = it }, label = { Text("Timer (min)") },
@@ -167,7 +216,6 @@ fun StepEditor(draft: StepDraft, problems: List<String>, content: String?, modif
                 modifier = Modifier.weight(1f),
             )
         }
-        content?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         Problems(problems)
     }
 }
@@ -211,12 +259,20 @@ private fun Problems(problems: List<String>) {
     problems.forEach { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
 }
 
-/** Save / Cancel / Undo my change. */
+/** Save / Cancel / Back to original / Remove (wraps onto two lines when they don't fit). */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun EditorButtons(onSave: () -> Unit, onCancel: (() -> Unit)?, onUndo: (() -> Unit)?, saveLabel: String = "Save") {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+fun EditorButtons(
+    onSave: () -> Unit,
+    onCancel: (() -> Unit)?,
+    onUndo: (() -> Unit)?,
+    saveLabel: String = "Save",
+    onRemove: (() -> Unit)? = null,
+) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.Center) {
         Button(onClick = onSave) { Text(saveLabel) }
         onCancel?.let { TextButton(onClick = it) { Text("Cancel") } }
         onUndo?.let { TextButton(onClick = it) { Text("Back to original") } }
+        onRemove?.let { TextButton(onClick = it) { Text("Remove", color = MaterialTheme.colorScheme.error) } }
     }
 }

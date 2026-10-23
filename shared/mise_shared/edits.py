@@ -27,6 +27,10 @@ def apply_edits(recipe: dict[str, Any], edits: Edits | dict[str, Any] | None) ->
         out["title"] = e.title
     if e.yield_ is not None:
         out["yield"] = e.yield_.model_dump(mode="json", exclude_none=True)
+    removed = set(e.removed_ingredients)
+    out["ingredients"] = [i for i in out.get("ingredients", []) if i.get("id") not in removed] + [
+        i.model_dump(mode="json", exclude_none=True) for i in e.added_ingredients
+    ]
     for ing in out.get("ingredients", []):
         change = e.ingredients.get(ing.get("id"))
         if change is None:
@@ -46,6 +50,8 @@ def apply_edits(recipe: dict[str, Any], edits: Edits | dict[str, Any] | None) ->
         if change is None:
             continue
         step["title"] = change.title
+        if change.content:
+            step["content"] = change.content
         values = change.model_dump(mode="json")
         for f in _STEP_FIELDS:
             if values.get(f) is None:

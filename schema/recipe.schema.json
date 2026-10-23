@@ -153,6 +153,16 @@
           "description": "Paths of review_flags already checked in the app's guided review.",
           "type": "array",
           "items": { "type": "string" }
+        },
+        "added_ingredients": {
+          "description": "Ingredients added in the app; ids from 9001 up so they never clash with converted ones.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/ingredient" }
+        },
+        "removed_ingredients": {
+          "description": "Ids of converted ingredients removed in the app.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[0-9]{4}$" }
         }
       }
     },
@@ -176,7 +186,8 @@
       "properties": {
         "title": { "type": "string", "minLength": 1 },
         "timer_seconds": { "type": "integer", "exclusiveMinimum": 0 },
-        "timer_max_seconds": { "type": "integer", "exclusiveMinimum": 0 }
+        "timer_max_seconds": { "type": "integer", "exclusiveMinimum": 0 },
+        "content": { "description": "New wording, with {0001} placeholders as in step.content.", "type": "string", "minLength": 1 }
       }
     }
   }

@@ -234,4 +234,21 @@ class RecipeRepositoryTest {
         assertThat(repo.detail(id).first()!!.recipe.title).isEqualTo("Mine") // still saved on the phone
         assertThat(db.annotations().get(id)!!.dirty).isTrue() // and retried next time
     }
+
+    @Test fun removingAnIngredientKeepsTheStepsReadable() = runTest {
+        repo.sync()
+        repo.removeIngredient(id, "0001") // the lamb
+        val d = repo.detail(id).first()!!
+        assertThat(d.recipe.ingredient("0001")).isNull()
+        assertThat(d.recipe.steps.none { "{0001" in it.content }).isTrue()
+        assertThat(d.recipe.steps.single { it.id == "s2" }.content).contains("Add the lamb and fry")
+        repo.addIngredient(id, app.mise.core.model.Ingredient(id = "9001", name = "chicken thighs", shortName = "chicken", amount = 600.0, unit = app.mise.core.model.MeasureUnit.G))
+        assertThat(repo.detail(id).first()!!.recipe.ingredients.last().name).isEqualTo("chicken thighs")
+        repo.removeIngredient(id, "9001") // removing something I added just drops it
+        repo.restoreIngredient(id, "0001")
+        val e = repo.detail(id).first()!!.edits
+        assertThat(e.addedIngredients).isEmpty()
+        assertThat(e.removedIngredients).isEmpty()
+        assertThat(repo.detail(id).first()!!.recipe.ingredient("0001")).isNotNull()
+    }
 }

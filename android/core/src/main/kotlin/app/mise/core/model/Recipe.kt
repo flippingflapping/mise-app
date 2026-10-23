@@ -165,9 +165,14 @@ data class RecipeEdits(
     val steps: Map<String, StepEdit> = emptyMap(),
     /** Paths of review flags already checked in the guided review. */
     @SerialName("checked_flags") val checkedFlags: List<String> = emptyList(),
+    /** Ingredients I added (ids from 9001 up, so they never clash with converted ones). */
+    @SerialName("added_ingredients") val addedIngredients: List<Ingredient> = emptyList(),
+    /** Ids of converted ingredients I removed. */
+    @SerialName("removed_ingredients") val removedIngredients: List<String> = emptyList(),
 ) {
     val isEmpty: Boolean
-        get() = title == null && recipeYield == null && ingredients.isEmpty() && steps.isEmpty() && checkedFlags.isEmpty()
+        get() = title == null && recipeYield == null && ingredients.isEmpty() && steps.isEmpty() && checkedFlags.isEmpty() &&
+            addedIngredients.isEmpty() && removedIngredients.isEmpty()
 }
 
 @Serializable
@@ -185,6 +190,8 @@ data class StepEdit(
     val title: String,
     @SerialName("timer_seconds") val timerSeconds: Int? = null,
     @SerialName("timer_max_seconds") val timerMaxSeconds: Int? = null,
+    /** New wording (stored form, with `{0003}` placeholders); null = as converted. */
+    val content: String? = null,
 )
 
 /** Body of `PUT /recipes/{id}/annotations`, and the sidecar format. */

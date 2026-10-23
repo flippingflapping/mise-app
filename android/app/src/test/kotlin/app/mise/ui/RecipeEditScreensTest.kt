@@ -86,6 +86,13 @@ class RecipeEditScreensTest {
         File(dir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    /** The screen's vertical list (the ingredient chips scroll sideways too). */
+    private fun list() = compose.onNode(
+        hasScrollAction() and androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(
+            androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange,
+        ),
+    )
+
     private fun recipe() = runBlocking { repo.detail(id).first()!! }
 
     @Test fun editAnIngredientAndTheServings() {
@@ -97,7 +104,7 @@ class RecipeEditScreensTest {
         compose.onNodeWithText("Save").performClick()
         compose.waitUntil(10_000) { recipe().recipe.recipeYield.baseServings == 4.0 }
 
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText("minced ginger", substring = true))
+        list().performScrollToNode(hasText("minced ginger", substring = true))
         compose.onNodeWithText("1 tsp minced ginger", substring = true).performClick()
         compose.onNode(hasSetTextAction() and hasText("Amount")).performTextReplacement("1½")
         compose.onNode(hasSetTextAction() and hasText("up to")).performTextReplacement("1")
@@ -138,5 +145,47 @@ class RecipeEditScreensTest {
         val lines = excerpt(TestFixtures.lambRaw, listOf("cinnamon stick, 9cm (3½in)"))
         assertThat(lines.first()).isEqualTo("2 9cm (3½in) cinnamon stick")
         assertThat(lines.drop(1).all { it.length < 140 }).isTrue() // long method lines are cut down
+    }
+
+    @Test fun rewordAStepAddAndRemoveIngredients() {
+        val vm = EditRecipeViewModel(id, repo)
+        show { EditRecipeScreen(vm, onBack = {}) }
+        waitFor("Makes")
+        // Reword step 2, keeping the scaling amount and adding a new mention.
+        list().performScrollToNode(hasText("Brown the lamb", substring = true))
+        compose.onNodeWithText("Brown the lamb", substring = true).performClick()
+        compose.onNode(hasSetTextAction() and hasText("What to do")).performTextReplacement("Heat {coconut oil, for browning} and brown the [lamb] well.")
+        screenshot("edit-step")
+        list().performScrollToNode(hasText("Save"))
+        compose.onNodeWithText("Save").performClick()
+        compose.waitUntil(10_000) { recipe().recipe.steps.single { it.id == "s2" }.content == "Heat {0007} and brown the {0001:name} well." }
+
+        // A typo in a name is explained instead of saved.
+        compose.onNodeWithText("Brown the lamb", substring = true).performClick()
+        compose.onNode(hasSetTextAction() and hasText("What to do")).performTextReplacement("Brown the {lamm}.")
+        list().performScrollToNode(hasText("Save"))
+        compose.onNodeWithText("Save").performClick()
+        waitFor("No ingredient called “lamm”", substring = true)
+        compose.onNodeWithText("Cancel").performClick()
+
+        // Add an ingredient.
+        list().performScrollToNode(hasText("+ Add an ingredient"))
+        compose.onNodeWithText("+ Add an ingredient").performClick()
+        compose.onNode(hasSetTextAction() and hasText("Amount")).performTextReplacement("1")
+        compose.onNode(hasSetTextAction() and hasText("Ingredient")).performTextReplacement("lime")
+        list().performScrollToNode(hasText("Add"))
+        compose.onNodeWithText("Add").performClick()
+        compose.waitUntil(10_000) { recipe().recipe.ingredients.any { it.name == "lime" } }
+
+        // Remove the curry leaves; the step that used them still reads.
+        list().performScrollToNode(hasText("curry leaves", substring = true))
+        compose.onNodeWithText("curry leaves", substring = true).performClick()
+        list().performScrollToNode(hasText("Remove"))
+        compose.onNodeWithText("Remove").performClick()
+        waitFor("Remove curry leaves?")
+        compose.onAllNodesWithText("Remove")[compose.onAllNodesWithText("Remove").fetchSemanticsNodes().size - 1].performClick()
+        compose.waitUntil(10_000) { recipe().recipe.ingredients.none { it.name == "curry leaves" } }
+        list().performScrollToNode(hasText("Put back"))
+        screenshot("edit-removed")
     }
 }

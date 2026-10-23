@@ -1,7 +1,9 @@
 package app.mise.data.repo
 
 import app.mise.core.edit.RecipeEditor
+import app.mise.core.edit.StepText
 import app.mise.core.model.Annotations
+import app.mise.core.model.Ingredient
 import app.mise.core.model.IngredientEdit
 import app.mise.core.model.Recipe
 import app.mise.core.model.RecipeEdits
@@ -308,6 +310,38 @@ class RecipeRepository @Inject constructor(
     suspend fun editStep(id: String, stepId: String, edit: StepEdit?) = updateEdits(id) {
         it.copy(steps = if (edit == null) it.steps - stepId else it.steps + (stepId to edit))
     }
+
+    /** Add an ingredient of my own (see [RecipeEditor.nextAddedId] for its id). */
+    suspend fun addIngredient(id: String, ingredient: Ingredient) =
+        updateEdits(id) { it.copy(addedIngredients = it.addedIngredients + ingredient) }
+
+    /**
+     * Remove an ingredient. Steps that use it keep its name as plain words, without an amount
+     * ("Add the garlic"), so the method still reads; they can be reworded afterwards.
+     */
+    suspend fun removeIngredient(id: String, ingredientId: String) {
+        val original = recipes.get(id)?.let { RecipeJson.decodeRecipe(it.json) } ?: return
+        updateEdits(id) { e ->
+            val current = RecipeEditor.apply(original, e)
+            val ing = current.ingredient(ingredientId) ?: return@updateEdits e
+            val steps = e.steps.toMutableMap()
+            for (step in current.steps) {
+                val reworded = StepText.withoutIngredient(step.content, ing)
+                if (reworded != step.content) steps[step.id] = (e.steps[step.id] ?: RecipeEditor.editOf(step)).copy(content = reworded)
+            }
+            val wasAdded = e.addedIngredients.any { it.id == ingredientId }
+            e.copy(
+                addedIngredients = e.addedIngredients.filter { it.id != ingredientId },
+                removedIngredients = if (wasAdded) e.removedIngredients else (e.removedIngredients + ingredientId).distinct(),
+                ingredients = e.ingredients - ingredientId,
+                steps = steps,
+            )
+        }
+    }
+
+    /** Put a removed ingredient back (the steps keep their plain wording; reword them to show the amount again). */
+    suspend fun restoreIngredient(id: String, ingredientId: String) =
+        updateEdits(id) { it.copy(removedIngredients = it.removedIngredients - ingredientId) }
 
     suspend fun editServings(id: String, servings: RecipeYield?) = updateEdits(id) { it.copy(recipeYield = servings) }
 

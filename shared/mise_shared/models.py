@@ -120,6 +120,8 @@ class StepEdit(_Strict):
     title: str = Field(min_length=1)
     timer_seconds: Optional[int] = Field(default=None, gt=0)
     timer_max_seconds: Optional[int] = Field(default=None, gt=0)
+    #: New wording with {0001} placeholders; None = as converted.
+    content: Optional[str] = Field(default=None, min_length=1)
 
 
 class Edits(_Strict):
@@ -130,12 +132,17 @@ class Edits(_Strict):
     ingredients: dict[str, IngredientEdit] = Field(default_factory=dict)
     steps: dict[str, StepEdit] = Field(default_factory=dict)
     checked_flags: list[str] = Field(default_factory=list)
+    added_ingredients: list[Ingredient] = Field(default_factory=list)
+    removed_ingredients: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid", use_enum_values=True, populate_by_name=True)
 
     @property
     def is_empty(self) -> bool:
-        return not (self.title or self.yield_ or self.ingredients or self.steps or self.checked_flags)
+        return not (
+            self.title or self.yield_ or self.ingredients or self.steps or self.checked_flags
+            or self.added_ingredients or self.removed_ingredients
+        )
 
 
 class UserData(_Strict):

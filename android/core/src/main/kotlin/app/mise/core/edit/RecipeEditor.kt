@@ -30,7 +30,7 @@ object RecipeEditor {
         return recipe.copy(
             title = edits.title?.takeIf { it.isNotBlank() } ?: recipe.title,
             recipeYield = edits.recipeYield ?: recipe.recipeYield,
-            ingredients = recipe.ingredients.map { ing ->
+            ingredients = (recipe.ingredients.filter { it.id !in edits.removedIngredients } + edits.addedIngredients).map { ing ->
                 val e = edits.ingredients[ing.id] ?: return@map ing
                 ing.copy(
                     name = e.name,
@@ -45,13 +45,24 @@ object RecipeEditor {
             },
             steps = recipe.steps.map { step ->
                 val e = edits.steps[step.id] ?: return@map step
-                step.copy(title = e.title, timerSeconds = e.timerSeconds, timerMaxSeconds = e.timerMaxSeconds)
+                step.copy(
+                    title = e.title, timerSeconds = e.timerSeconds, timerMaxSeconds = e.timerMaxSeconds,
+                    content = e.content?.takeIf { it.isNotBlank() } ?: step.content,
+                )
             },
         )
     }
 
     fun editOf(ing: Ingredient) = IngredientEdit(ing.name, ing.prep, ing.amount, ing.amountMax, ing.unit, ing.optional)
     fun editOf(step: Step) = StepEdit(step.title, step.timerSeconds, step.timerMaxSeconds)
+
+    /** The id for a new ingredient: 9001 up, after any I've already added. */
+    fun nextAddedId(recipe: Recipe): String {
+        val taken = recipe.ingredients.mapNotNull { it.id.toIntOrNull() }.filter { it >= FIRST_ADDED_ID }
+        return ((taken.maxOrNull() ?: (FIRST_ADDED_ID - 1)) + 1).toString().padStart(4, '0')
+    }
+
+    const val FIRST_ADDED_ID = 9001
 
     /** Plain-English problems with an ingredient edit (empty = fine). */
     fun problems(e: IngredientEdit): List<String> = buildList {

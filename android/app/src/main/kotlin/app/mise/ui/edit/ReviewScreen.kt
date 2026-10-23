@@ -228,11 +228,11 @@ private fun FlagStep(
             val current = recipe.steps.firstOrNull { it.id == target.step.id } ?: target.step
             val text = StepRenderer.plainText(current.content, recipe, 1.0, UnitMode.ORIGINAL)
             Original(excerpt(source, listOf(current.title) + text.split(" ").take(8)), onOriginal)
-            val draft = remember(key, current) { StepDraft(RecipeEditor.editOf(current)) }
+            val draft = remember(key, current) { StepDraft(current, recipe, target.step) }
             var tried by remember(key) { mutableStateOf(false) }
             val problems = if (tried) draft.result().second else emptyList()
-            StepEditor(draft, problems, content = "Step ${target.index + 1}: $text")
-            Decide(changed = { draft.result().first != RecipeEditor.editOf(current) }, onLooksRight = { vm.looksRight(flag); next() }) {
+            StepEditor(draft, problems, label = "Step ${target.index + 1}")
+            Decide(changed = { draft.isChanged }, onLooksRight = { vm.looksRight(flag); next() }) {
                 val edit = draft.result().first
                 tried = true
                 if (edit != null) { vm.saveStep(flag, current.id, edit); next() }

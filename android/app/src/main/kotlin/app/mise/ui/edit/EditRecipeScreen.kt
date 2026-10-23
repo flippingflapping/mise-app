@@ -19,6 +19,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -41,11 +42,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.mise.core.edit.RecipeEditor
+import app.mise.core.edit.StepText
+import app.mise.core.model.Ingredient
 import app.mise.core.model.IngredientEdit
 import app.mise.core.model.RecipeYield
 import app.mise.core.model.StepEdit
@@ -93,6 +97,20 @@ class EditRecipeViewModel @AssistedInject constructor(
     }
 
     fun resetAll() = viewModelScope.launch { repository.resetEdits(recipeId) }
+
+    fun addIngredient(edit: IngredientEdit, group: String?) = viewModelScope.launch {
+        val recipe = detail.value?.recipe ?: return@launch
+        repository.addIngredient(
+            recipeId,
+            Ingredient(
+                id = RecipeEditor.nextAddedId(recipe), group = group, name = edit.name, shortName = edit.name,
+                prep = edit.prep, amount = edit.amount, amountMax = edit.amountMax, unit = edit.unit, optional = edit.optional,
+            ),
+        )
+    }
+
+    fun removeIngredient(id: String) = viewModelScope.launch { repository.removeIngredient(recipeId, id) }
+    fun restoreIngredient(id: String) = viewModelScope.launch { repository.restoreIngredient(recipeId, id) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -101,6 +119,7 @@ fun EditRecipeScreen(viewModel: EditRecipeViewModel, onBack: () -> Unit) {
     val detail by viewModel.detail.collectAsStateWithLifecycle()
     var open by rememberSaveable { mutableStateOf<String?>(null) } // "title", "servings", "i:0003", "s:s2"
     var confirmReset by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf<Ingredient?>(null) }
 
     Scaffold(topBar = {
         TopAppBar(
@@ -124,7 +143,7 @@ fun EditRecipeScreen(viewModel: EditRecipeViewModel, onBack: () -> Unit) {
             }
             item(key = "title") {
                 EditableRow(
-                    label = "Title", value = recipe.title, edited = edits.title != null, isOpen = open == "title",
+                    label = "Title", value = recipe.title, tag = if (edits.title != null) "Edited" else null, isOpen = open == "title",
                     onOpen = { open = "title" },
                 ) {
                     var text by rememberSaveable { mutableStateOf(recipe.title) }
@@ -141,7 +160,7 @@ fun EditRecipeScreen(viewModel: EditRecipeViewModel, onBack: () -> Unit) {
                 val y = recipe.recipeYield
                 EditableRow(
                     label = "Makes", value = "${RecipeEditor.formatAmount(y.baseServings)} ${y.label ?: "servings"}",
-                    edited = edits.recipeYield != null, isOpen = open == "servings", onOpen = { open = "servings" },
+                    tag = if (edits.recipeYield != null) "Edited" else null, isOpen = open == "servings", onOpen = { open = "servings" },
                 ) {
                     val draft = remember(y) { ServingsDraft(y) }
                     var tried by remember { mutableStateOf(false) }
@@ -164,8 +183,10 @@ fun EditRecipeScreen(viewModel: EditRecipeViewModel, onBack: () -> Unit) {
                 val i = recipe.ingredients.indexOf(ing)
                 // The group name ("Marinade") once, above its first ingredient.
                 val group = ing.group?.takeIf { it != recipe.ingredients.getOrNull(i - 1)?.group }
+                val added = edits.addedIngredients.any { it.id == ing.id }
                 EditableRow(
-                    label = group, value = ingredientLine(ing), edited = ing.id in edits.ingredients,
+                    label = group, value = ingredientLine(ing),
+                    tag = if (added) "Added" else if (ing.id in edits.ingredients) "Edited" else null,
                     isOpen = open == key, onOpen = { open = key },
                 ) {
                     val draft = remember(ing) { IngredientDraft(RecipeEditor.editOf(ing)) }
@@ -179,8 +200,52 @@ fun EditRecipeScreen(viewModel: EditRecipeViewModel, onBack: () -> Unit) {
                             if (result != null) { viewModel.saveIngredient(ing.id, result); open = null }
                         },
                         onCancel = { open = null },
-                        onUndo = if (ing.id in edits.ingredients) ({ viewModel.saveIngredient(ing.id, null); open = null }) else null,
+                        onUndo = if (!added && ing.id in edits.ingredients) ({ viewModel.saveIngredient(ing.id, null); open = null }) else null,
+                        onRemove = { removing = ing },
                     )
+                }
+            }
+            item(key = "add-ing") {
+                val groups = recipe.ingredients.mapNotNull { it.group?.takeIf(String::isNotBlank) }.distinct()
+                EditableRow(label = null, value = "+ Add an ingredient", tag = null, isOpen = open == "new", onOpen = { open = "new" }) {
+                    val draft = remember { IngredientDraft(IngredientEdit("")) }
+                    var group by rememberSaveable { mutableStateOf(groups.lastOrNull()) }
+                    var tried by remember { mutableStateOf(false) }
+                    val problems = if (tried) draft.result().second else emptyList()
+                    Text("New ingredient", style = MaterialTheme.typography.labelLarge)
+                    if (groups.isNotEmpty()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            groups.forEach { g -> FilterChip(selected = group == g, onClick = { group = g }, label = { Text(g) }) }
+                        }
+                    }
+                    IngredientEditor(draft, problems)
+                    Text(
+                        "To use it in a step, open the step and type its name in {braces}.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    EditorButtons(
+                        saveLabel = "Add",
+                        onSave = {
+                            val result = draft.result().first
+                            tried = true
+                            if (result != null) { viewModel.addIngredient(result, group); open = null }
+                        },
+                        onCancel = { open = null },
+                        onUndo = null,
+                    )
+                }
+            }
+            val removed = d.original.ingredients.filter { it.id in edits.removedIngredients }
+            if (removed.isNotEmpty()) {
+                item(key = "removed-h") {
+                    Text("Removed", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 16.dp, top = 12.dp))
+                }
+                items(removed, key = { "r:" + it.id }) { ing ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(ingredientLine(ing), Modifier.weight(1f), textDecoration = TextDecoration.LineThrough,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { viewModel.restoreIngredient(ing.id) }) { Text("Put back") }
+                    }
                 }
             }
             item(key = "steps-h") { SectionTitle("Steps") }
@@ -189,12 +254,13 @@ fun EditRecipeScreen(viewModel: EditRecipeViewModel, onBack: () -> Unit) {
                 val index = recipe.steps.indexOf(step) + 1
                 EditableRow(
                     label = "Step $index", value = step.title + (stepTimerText(step)?.let { " · ⏱ $it" } ?: ""),
-                    edited = step.id in edits.steps, isOpen = open == key, onOpen = { open = key },
+                    tag = if (step.id in edits.steps) "Edited" else null, isOpen = open == key, onOpen = { open = key },
                 ) {
-                    val draft = remember(step) { StepDraft(RecipeEditor.editOf(step)) }
+                    val original = d.original.steps.firstOrNull { it.id == step.id }
+                    val draft = remember(step, recipe) { StepDraft(step, recipe, original) }
                     var tried by remember { mutableStateOf(false) }
                     val problems = if (tried) draft.result().second else emptyList()
-                    StepEditor(draft, problems, content = null)
+                    StepEditor(draft, problems, label = null)
                     EditorButtons(
                         onSave = {
                             val result = draft.result().first
@@ -212,6 +278,23 @@ fun EditRecipeScreen(viewModel: EditRecipeViewModel, onBack: () -> Unit) {
                 }
             }
         }
+    }
+    removing?.let { ing ->
+        val recipe = detail?.recipe
+        val steps = recipe?.let { StepText.stepsUsing(it, ing.id) }.orEmpty()
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text("Remove ${ing.name}?") },
+            text = {
+                Text(
+                    if (steps.isEmpty()) "It isn't used in any step."
+                    else "Step${if (steps.size == 1) "" else "s"} ${steps.joinToString(", ")} mention${if (steps.size == 1) "s" else ""} it. " +
+                        "They'll still say “${ing.shortName}”, just without an amount — reword them below if you like.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { viewModel.removeIngredient(ing.id); removing = null }) { Text("Remove") } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+        )
     }
     if (confirmReset) {
         AlertDialog(
@@ -237,7 +320,8 @@ private fun SectionTitle(text: String) {
 private fun EditableRow(
     label: String?,
     value: String,
-    edited: Boolean,
+    /** "Edited" / "Added", or null. */
+    tag: String?,
     isOpen: Boolean,
     onOpen: () -> Unit,
     editor: @Composable () -> Unit,
@@ -261,9 +345,9 @@ private fun EditableRow(
     ) {
         Column(Modifier.weight(1f)) {
             label?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = if (edited) FontWeight.SemiBold else null)
+            Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = if (tag != null) FontWeight.SemiBold else null)
         }
-        if (edited) AssistChip(onClick = onOpen, label = { Text("Edited") })
+        tag?.let { AssistChip(onClick = onOpen, label = { Text(it) }) }
     }
     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
 }
