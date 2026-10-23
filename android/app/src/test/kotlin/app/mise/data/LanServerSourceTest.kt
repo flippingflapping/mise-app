@@ -63,6 +63,31 @@ class LanServerSourceTest {
         assertThat(body).doesNotContain("null") // an older server would reject fields it doesn't know, even null ones
     }
 
+    @Test fun requestsAndSubstitutes() = runTest {
+        val s = source { req ->
+            when (req.url.encodedPath) {
+                "/api/v1/recipes/request" -> respond("""{"id":"j9","filename":"","status":"queued","kind":"request"}""", HttpStatusCode.Accepted, json)
+                else -> respond(
+                    """{"ingredient_id":"0003","suggestions":[{"name":"garlic paste","amount":1,"unit":"tsp","note":"n"},""" +
+                        """{"name":"leave it out","amount":null,"unit":null,"note":"m"}]}""",
+                    HttpStatusCode.OK, json,
+                )
+            }
+        }
+        val job = s.requestRecipe("a quick dal")
+        assertThat(job.kind).isEqualTo("request")
+        assertThat((requests[0].body as TextContent).text).isEqualTo("""{"text":"a quick dal"}""")
+        val ideas = s.substitutes("lamb-curry", "0003")
+        assertThat(requests[1].url.encodedPath).isEqualTo("/api/v1/recipes/lamb-curry/substitutes")
+        assertThat((requests[1].body as TextContent).text).isEqualTo("""{"ingredient_id":"0003"}""")
+        assertThat(ideas.map { it.name }).containsExactly("garlic paste", "leave it out").inOrder()
+        assertThat(ideas[0].unit).isEqualTo(app.mise.core.model.MeasureUnit.TSP)
+
+        val old = source { respond("""{"detail":"Not Found"}""", HttpStatusCode.NotFound, json) }
+        val e = runCatching { old.requestRecipe("dal") }.exceptionOrNull() as SourceException
+        assertThat(e.message).contains("too old")
+    }
+
     @Test fun rejectedEditsSayWhy() = runTest {
         val s = source { respond("""{"detail":"those edits would break the recipe: x"}""", HttpStatusCode.UnprocessableEntity, json) }
         val e = runCatching { s.putAnnotations("x", Annotations(edits = app.mise.core.model.RecipeEdits(title = "t"))) }

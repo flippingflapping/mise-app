@@ -247,6 +247,21 @@ class PlansScreensTest {
         screenshot("add-recipe-long")
     }
 
+    @Test fun askForARecipeInPlainWords() {
+        val vm = AddRecipeViewModel(null, null, repo, settings)
+        var opened: String? = null
+        show { AddRecipeScreen(vm, onBack = {}, onOpenRecipe = { opened = it }) }
+        waitFor("Describe one")
+        compose.onNodeWithText("Describe one").performClick()
+        compose.onNodeWithText("A vegetarian shepherd's pie").performClick() // an example fills the box
+        screenshot("ask-recipe")
+        compose.onNodeWithText("Ask my PC for a recipe").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Your recipe is ready").fetchSemanticsNodes().isNotEmpty() }
+        assertThat(source.requests.single()).isEqualTo("A vegetarian shepherd's pie")
+        compose.onNodeWithText("Open recipe").performClick()
+        assertThat(opened).isEqualTo(id)
+    }
+
     @Test fun addRecipeWithoutKeyWaitsInInbox() {
         source.features = app.mise.data.source.ServerFeatures(canImport = true, canConvert = false)
         val vm = AddRecipeViewModel("shared text from Chrome", "Shared title", repo, settings)

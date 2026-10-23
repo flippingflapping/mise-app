@@ -117,6 +117,12 @@ Running `convert run` again only converts new or changed files.
 Tap **Add recipe** in the library (or, in Chrome or any app, *Share → Add to Mise*), paste the recipe
 text and tap **Send to my PC**. The text is saved to `inbox/from-phone/` on the PC.
 
+**No recipe to paste?** Choose **Describe one** and say what you'd like ("a quick weeknight dal for 4",
+"something with leftover roast chicken, 30 minutes"). Your PC asks Claude to write a recipe in the same
+format as the rest of your library: scaling amounts in the steps, timers, the lot. It's marked
+**Needs review**, with a note that Claude wrote it, so give it a read first. On the PC the same thing
+is `convert ask "a quick weeknight dal for 4"`.
+
 * If the PC can convert (Claude Code logged in with your subscription, or the server **started with
   `ANTHROPIC_API_KEY` set** in that terminal), it converts the recipe straight away (one at a time)
   and it appears in your library within a minute or so. The server's start-up message says whether
@@ -141,11 +147,19 @@ Either way the phone never sees any key or login. Adding recipes needs the PC se
 * **Cooking mode** (▶ Start cooking): one step per screen, huge text, swipe or big Back/Next
   buttons, the step's ingredients on top, screen stays on.
 * **Edit a recipe:** the ✏️ on a recipe. Tap any line to change it: the title, how many it makes,
-  each ingredient (amount or range like 1–2, unit, name, preparation, optional) and each step's
-  title and timer. Amounts in the steps, shopping lists and meal plans all follow your edits. Your
-  edits are kept separately from the converted recipe (in `recipes/<id>.user.json` on the PC), so
-  **Back to original** / **Undo all my edits** always work, and re-reading the recipe file never
-  loses them. (Changing step wording isn't in the app yet: edit `recipes/<id>.json` on the PC.)
+  each ingredient (amount or range like 1–2, unit, name, preparation, optional), and each step's
+  title, wording and timer. **+ Add an ingredient** and **Remove** work too (a removed ingredient
+  still reads naturally in the steps, just without an amount; **Put back** undoes it). In a step's
+  wording, `{lamb}` is the scaling amount and name ("500 g lamb") and `[lamb]` just the name; tap an
+  ingredient chip to insert one. Amounts in the steps, shopping lists and meal plans all follow your
+  edits. Your edits are kept separately from the converted recipe (in `recipes/<id>.user.json` on the
+  PC), so **Back to original** / **Undo all my edits** always work, and re-reading the recipe file
+  never loses them.
+* **Swap an ingredient:** the ⇄ next to an ingredient. It shows the recipe's own suggestion, and
+  **Ask for ideas** gets a few swaps from Claude on your PC, sized for this recipe, with a note on
+  what changes ("dried thyme: use a third as much"). **Use this** swaps it in as an edit, so the
+  amounts, steps and shopping list follow, and **Back to original** undoes it. (Needs the PC server
+  with Claude Code logged in or an API key; ideas are remembered, so asking again is instant.)
 * **My notes:** your own notes per recipe, kept separate from the author's. They sync back to the PC
   (in `recipes/<id>.user.json`), as do favourites, "Mark as reviewed" and **I made this** (which feeds
   *Recently cooked*).

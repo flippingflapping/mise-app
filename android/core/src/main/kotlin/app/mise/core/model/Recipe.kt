@@ -178,6 +178,8 @@ data class RecipeEdits(
 @Serializable
 data class IngredientEdit(
     val name: String,
+    /** How it reads in the steps; null = unchanged (or follows [name], if it did). */
+    @SerialName("short_name") val shortName: String? = null,
     val prep: String? = null,
     val amount: Double? = null,
     @SerialName("amount_max") val amountMax: Double? = null,

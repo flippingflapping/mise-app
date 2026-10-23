@@ -61,7 +61,7 @@ fun stepTimerText(step: Step): String? = step.timerSeconds?.let { min ->
 
 /** What the person has typed for one ingredient; [result] turns it into an edit or explains what's wrong. */
 @Stable
-class IngredientDraft(start: IngredientEdit) {
+class IngredientDraft(private val start: IngredientEdit) {
     var amount by mutableStateOf(RecipeEditor.formatAmount(start.amount))
     var amountMax by mutableStateOf(RecipeEditor.formatAmount(start.amountMax))
     var unit by mutableStateOf(start.unit)
@@ -75,7 +75,12 @@ class IngredientDraft(start: IngredientEdit) {
         if (amount.isNotBlank() && a == null) problems += "“$amount” isn't a number. Try 2, 1.5, ½ or 1 1/2."
         val m = RecipeEditor.parseAmount(amountMax)
         if (amountMax.isNotBlank() && m == null) problems += "“$amountMax” isn't a number."
-        val edit = IngredientEdit(name.trim(), prep.trim().ifEmpty { null }, a, m, unit, optional)
+        // A short name that matched the name keeps matching it; one that differed ("garlic") stays.
+        val short = if (start.shortName == null || start.shortName == start.name) name.trim() else start.shortName
+        val edit = IngredientEdit(
+            name = name.trim(), shortName = short, prep = prep.trim().ifEmpty { null },
+            amount = a, amountMax = m, unit = unit, optional = optional,
+        )
         problems += RecipeEditor.problems(edit)
         return (if (problems.isEmpty()) edit else null) to problems
     }

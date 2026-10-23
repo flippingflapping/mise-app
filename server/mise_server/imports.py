@@ -39,11 +39,15 @@ FAILED = "failed"
 @dataclass
 class ImportJob:
     id: str
-    filename: str  # relative to the inbox
+    filename: str  # relative to the inbox ("" for a request)
     status: str
     created_at: str = field(default_factory=now_iso)
     recipe_id: str | None = None
     error: str | None = None
+    #: "import" (pasted text, converted) or "request" (a recipe written from a few words).
+    kind: str = "import"
+    #: For a request: what was asked.
+    request: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -91,6 +95,7 @@ class ImportQueue:
         self._lock = threading.Lock()
         self._queue: queue.Queue[str] = queue.Queue()
         self._worker: threading.Thread | None = None
+        self._finder = None  # SubstituteFinder, made on first use
 
     # ------------------------------------------------------------------ API
 
@@ -115,6 +120,31 @@ class ImportQueue:
             self._ensure_worker()
             self._queue.put(job.id)
         return job
+
+    def request(self, text: str) -> ImportJob:
+        """Queue writing a new recipe from a request ("a quick dal for 4"). Needs a way to convert."""
+        if not self.can_convert:
+            raise RuntimeError("this PC can't write recipes: log in to Claude Code or set ANTHROPIC_API_KEY")
+        job = ImportJob(id=uuid.uuid4().hex[:12], filename="", status=QUEUED, kind="request", request=text.strip())
+        with self._lock:
+            self._jobs[job.id] = job
+        log.info("Recipe requested from the phone: %s", job.request[:80])
+        self._ensure_worker()
+        self._queue.put(job.id)
+        return job
+
+    def substitutes(self, recipe: dict[str, Any], ingredient_id: str) -> list[dict[str, Any]]:
+        """Swap ideas for one ingredient (cached). Runs on the caller's thread: it's one quick call."""
+        from mise_converter.substitutes import SubstituteFinder
+
+        if self._finder is None:
+            self._finder = SubstituteFinder(self.cfg.state_dir, self.cfg.converter.model)
+        cached = self._finder.cached(recipe, ingredient_id)
+        if cached is not None:
+            return cached
+        if not self.can_convert or self._client_factory is None:
+            raise RuntimeError("this PC can't suggest substitutes: log in to Claude Code or set ANTHROPIC_API_KEY")
+        return self._finder.find(self._client_factory(), recipe, ingredient_id)
 
     def get(self, job_id: str) -> ImportJob | None:
         with self._lock:
@@ -146,7 +176,9 @@ class ImportQueue:
             job = None
             try:
                 job = self.get(job_id)
-                if job:
+                if job and job.kind == "request":
+                    self._write_requested(job)
+                elif job:
                     self._convert(job)
             except Exception as e:  # never let one recipe kill the worker
                 log.exception("Import %s crashed", job_id)
@@ -154,6 +186,17 @@ class ImportQueue:
                     self._set(job, status=FAILED, error=str(e))
             finally:
                 self._queue.task_done()
+
+    def _write_requested(self, job: ImportJob) -> None:
+        from mise_converter.generate import generate_recipe
+
+        self._set(job, status=CONVERTING)
+        result = generate_recipe(self.cfg, self._client_factory(), job.request or "", log=lambda m: log.info(m.strip()))
+        if result.recipe_id:
+            self.library.reload([result.recipe_id])
+            self._set(job, status=NEEDS_REVIEW, recipe_id=result.recipe_id)
+        else:
+            self._set(job, status=FAILED, error=re.sub(r"\s+", " ", "; ".join(result.errors))[:500] or "no recipe came back")
 
     def _convert(self, job: ImportJob) -> None:
         from mise_converter import manifest as mf

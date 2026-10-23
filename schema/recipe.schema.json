@@ -172,6 +172,7 @@
       "required": ["name"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
+        "short_name": { "description": "How it reads in the steps; absent = unchanged (or follows name).", "type": "string", "minLength": 1 },
         "prep": { "type": "string" },
         "amount": { "type": ["number", "null"], "exclusiveMinimum": 0 },
         "amount_max": { "type": "number", "exclusiveMinimum": 0 },

@@ -36,6 +36,14 @@ interface RecipeSource {
     suspend fun importRecipe(text: String, title: String?, source: String?): ImportJob =
         throw UnsupportedOperationException("Adding recipes needs the PC server")
 
+    /** Ask the PC to write a new recipe from a few words ("a quick dal for 4"). */
+    suspend fun requestRecipe(text: String): ImportJob =
+        throw UnsupportedOperationException("Asking for recipes needs the PC server")
+
+    /** Ideas for swapping one ingredient, sized for the recipe as I've edited it (PC server only). */
+    suspend fun substitutes(recipeId: String, ingredientId: String): List<Substitute> =
+        throw UnsupportedOperationException("Substitute ideas need the PC server")
+
     /** Progress of an import; null if the server no longer knows it (e.g. it restarted). */
     suspend fun importStatus(jobId: String): ImportJob? = null
 
@@ -46,7 +54,23 @@ interface RecipeSource {
     }
 }
 
-data class ServerFeatures(val canImport: Boolean, val canConvert: Boolean)
+/** One swap idea: what to use instead, how much (for the recipe as written), and what changes. */
+@kotlinx.serialization.Serializable
+data class Substitute(
+    val name: String,
+    val amount: Double? = null,
+    val unit: app.mise.core.model.MeasureUnit? = null,
+    val note: String = "",
+)
+
+data class ServerFeatures(
+    val canImport: Boolean,
+    val canConvert: Boolean,
+    /** Can write a recipe from a request (needs Claude on the PC, and a recent server). */
+    val canRequest: Boolean = false,
+    /** Can suggest substitutes for an ingredient. */
+    val canSubstitute: Boolean = false,
+)
 
 @kotlinx.serialization.Serializable
 data class ImportJob(
@@ -56,6 +80,8 @@ data class ImportJob(
     val status: String,
     @kotlinx.serialization.SerialName("recipe_id") val recipeId: String? = null,
     val error: String? = null,
+    /** "import" (pasted text) or "request" (written from a few words). */
+    val kind: String = "import",
 ) {
     val finished: Boolean get() = status in setOf("saved", "done", "needs_review", "failed")
 }

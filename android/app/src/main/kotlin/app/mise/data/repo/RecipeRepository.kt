@@ -400,6 +400,23 @@ class RecipeRepository @Inject constructor(
     suspend fun serverFeatures(): Result<app.mise.data.source.ServerFeatures> =
         runCatching { sources.source(settings.current()).features() }
 
+    /** Swap ideas from the PC. My edits are pushed first, so the ideas fit the recipe as I see it. */
+    suspend fun substitutes(id: String, ingredientId: String): Result<List<app.mise.data.source.Substitute>> = runCatching {
+        val source = sources.source(settings.current())
+        syncMutex.withLock { pushAnnotations(source) }
+        source.substitutes(id, ingredientId)
+    }
+
+    /** Use a swap idea: it becomes an ordinary edit of that ingredient ("leave it out" removes it). */
+    suspend fun useSubstitute(id: String, ingredientId: String, s: app.mise.data.source.Substitute) {
+        if (s.name.trim().equals("leave it out", ignoreCase = true)) return removeIngredient(id, ingredientId)
+        // The steps should name the new ingredient too ("Add 2 shallots", not "Add 2 onion").
+        editIngredient(id, ingredientId, IngredientEdit(name = s.name.trim(), shortName = s.name.trim(), amount = s.amount, unit = s.unit))
+    }
+
+    suspend fun requestRecipe(text: String): Result<app.mise.data.source.ImportJob> =
+        runCatching { sources.source(settings.current()).requestRecipe(text) }
+
     suspend fun importRecipe(text: String, title: String?, source: String?): Result<app.mise.data.source.ImportJob> =
         runCatching { sources.source(settings.current()).importRecipe(text, title, source) }
 

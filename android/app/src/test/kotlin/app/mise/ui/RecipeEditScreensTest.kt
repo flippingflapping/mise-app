@@ -30,6 +30,8 @@ import app.mise.ui.edit.EditRecipeScreen
 import app.mise.ui.edit.EditRecipeViewModel
 import app.mise.ui.edit.ReviewScreen
 import app.mise.ui.edit.ReviewViewModel
+import app.mise.ui.edit.SubstitutesScreen
+import app.mise.ui.edit.SubstitutesViewModel
 import app.mise.ui.edit.excerpt
 import app.mise.ui.theme.MiseTheme
 import com.google.common.truth.Truth.assertThat
@@ -187,5 +189,23 @@ class RecipeEditScreensTest {
         compose.waitUntil(10_000) { recipe().recipe.ingredients.none { it.name == "curry leaves" } }
         list().performScrollToNode(hasText("Put back"))
         screenshot("edit-removed")
+    }
+
+    @Test fun swapAnIngredientForASuggestion() {
+        val vm = SubstitutesViewModel(id, "0003", repo, FakeSettings()) // minced garlic (Marinade)
+        var back = false
+        show { SubstitutesScreen(vm, onBack = { back = true }) }
+        waitFor("Instead of")
+        compose.onNodeWithText("1 tsp minced garlic").assertExists()
+        compose.onNodeWithText("Ask for ideas").performClick()
+        waitFor("1 tsp garlic paste")
+        compose.onNodeWithText("Leave it out").assertExists()
+        screenshot("substitutes")
+        compose.onAllNodesWithText("Use this")[0].performClick()
+        compose.waitUntil(10_000) { back }
+        val garlic = recipe().recipe.ingredient("0003")!!
+        assertThat(garlic.name).isEqualTo("garlic paste")
+        assertThat(garlic.shortName).isEqualTo("garlic paste") // so the steps say it too
+        assertThat(source.substituteAsks.single()).isEqualTo(id to "0003")
     }
 }

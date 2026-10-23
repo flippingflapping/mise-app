@@ -368,3 +368,22 @@ of failing the whole sync. The guided review maps each review flag's path (`ingr
 `steps[3]…`, `yield…`) to the item, shows the converter's note, the best-matching lines of the original
 text and an editor for that item; checking every flag marks the recipe reviewed. Not editable in the
 app yet: step wording (placeholders make free-text editing error-prone), adding/removing ingredients.
+
+**Step wording, adding/removing ingredients, recipe requests, substitutes.**
+* Step wording is edited as plain text: `{label}` = amount placeholder, `[label]` = name-only. Labels
+  are made unique (short name → full name → "name (group)" → `#id`) because short names clash a lot
+  (two "coconut oil", two identical "minced ginger" in different groups); exact labels win over loose
+  matches when parsing back. Added ingredients get ids from 9001; removing one rewrites its step
+  placeholders to its short name so the recipe stays valid, and can be put back.
+* Requests ("a quick dal for 4") reuse the conversion guide and worked example inside a writer prompt
+  (`write_recipe.md`) that replaces the "invent nothing" ground rules; output goes through the same
+  normalise/validate/retry path, is always needs_review with a "written by Claude" flag (path
+  `source`), and keeps the request as the source text. Server: `POST /recipes/request` → the import
+  job queue (`kind: request`); CLI: `convert ask`.
+* Substitutes: `POST /recipes/{id}/substitutes` makes one small structured-output call with the recipe
+  (with the cook's edits applied) as context, 2–4 ideas with amount/unit for the recipe as written
+  and a note; cached in `recipes/.mise/substitutes.json` keyed by the recipe and ingredient as they
+  are. "Use this" stores an ordinary ingredient edit with `short_name` set, so the steps follow.
+  The Claude Code backend now takes the JSON schema from each request (not always the recipe one).
+* Verified for real through Claude Code: a request ("red lentil dal for 4, mild") produced a valid,
+  sensible recipe with useful flags; substitutes for the oil came back in ~6 s, cached after.

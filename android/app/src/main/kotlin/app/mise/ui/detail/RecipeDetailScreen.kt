@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -111,6 +112,7 @@ fun RecipeDetailScreen(
     modifier: Modifier = Modifier,
     onEdit: () -> Unit = {},
     onReview: () -> Unit = {},
+    onSubstitutes: (ingredientId: String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val image by viewModel.image.collectAsStateWithLifecycle()
@@ -224,6 +226,7 @@ fun RecipeDetailScreen(
                         highlighted = state.highlighted == ing.id,
                         onToggle = { viewModel.toggleChecked(ing.id) },
                         onScaleBy = if (ScaleByIngredient.canScaleBy(ing)) ({ scaleTarget = ing }) else null,
+                        onSwap = { onSubstitutes(ing.id) },
                     )
                 }
             }
@@ -457,6 +460,7 @@ private fun IngredientRow(
     highlighted: Boolean,
     onToggle: () -> Unit,
     onScaleBy: (() -> Unit)?,
+    onSwap: (() -> Unit)? = null,
 ) {
     val amount = remember(ingredient, factor, mode) { AmountRenderer.render(ingredient, factor, mode) }
     val bg by animateColorAsState(
@@ -513,6 +517,12 @@ private fun IngredientRow(
             ingredient.substitutes?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = dim))
+            }
+        }
+        onSwap?.let {
+            IconButton(onClick = it) {
+                Icon(Icons.Outlined.SwapHoriz, "Swap ${ingredient.shortName} for something else",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

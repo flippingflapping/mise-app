@@ -104,6 +104,15 @@ log message, if you break it.
 Your own scribbles from the pasted text ("try cumin seeds next time") end up in **My notes** in the
 app, not in the method.
 
+## Writing a recipe from a request
+
+`convert ask "a quick weeknight red lentil dal for 4, mild"` writes a new recipe into `recipes/`
+(the phone's *Add recipe → Describe one* does the same through the server). It uses the same
+format rules as conversions, with its own instructions (`converter/prompts/write_recipe.md`): pick
+dependable amounts and times, respect every constraint in the request, cook meat and fish safely,
+and flag the judgement calls. The recipe is always **Needs review**, with a first note saying Claude
+wrote it; `<id>.source.txt` keeps the request, so *View original text* shows what was asked.
+
 ## 5. Status, failures and re-runs
 
 ```

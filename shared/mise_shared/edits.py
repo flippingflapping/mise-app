@@ -35,7 +35,9 @@ def apply_edits(recipe: dict[str, Any], edits: Edits | dict[str, Any] | None) ->
         change = e.ingredients.get(ing.get("id"))
         if change is None:
             continue
-        if ing.get("short_name") == ing.get("name"):
+        if change.short_name:
+            ing["short_name"] = change.short_name
+        elif ing.get("short_name") == ing.get("name"):
             ing["short_name"] = change.name  # the short name followed the name, so keep following it
         ing["name"] = change.name
         values = change.model_dump(mode="json")

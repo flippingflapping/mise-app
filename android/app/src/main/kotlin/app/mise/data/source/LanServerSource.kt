@@ -6,6 +6,7 @@ import app.mise.core.model.RecipeJson
 import app.mise.core.model.RecipeSummary
 import app.mise.data.settings.SourceKind
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -55,6 +56,8 @@ class LanServerSource(
         val schema_version: Int = 0,
         val can_import: Boolean = false,
         val can_convert: Boolean = false,
+        val can_request: Boolean = false,
+        val can_substitute: Boolean = false,
     )
 
     @Serializable
@@ -64,7 +67,7 @@ class LanServerSource(
         val resp = call { http.get("$api/health") }
         ensureOk(resp)
         val h = decode { RecipeJson.lenient.decodeFromString(Health.serializer(), resp.bodyAsText()) }
-        return ServerFeatures(h.can_import, h.can_convert)
+        return ServerFeatures(h.can_import, h.can_convert, h.can_request, h.can_substitute)
     }
 
     override suspend fun importRecipe(text: String, title: String?, source: String?): ImportJob {
@@ -83,6 +86,57 @@ class LanServerSource(
         listCache = null
         return decode { RecipeJson.lenient.decodeFromString(ImportJob.serializer(), resp.bodyAsText()) }
     }
+
+    @Serializable
+    private data class RequestBody(val text: String)
+
+    override suspend fun requestRecipe(text: String): ImportJob {
+        val body = RecipeJson.canonical.encodeToString(RequestBody.serializer(), RequestBody(text))
+        val resp = call {
+            http.post("$api/recipes/request") {
+                auth()
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+        }
+        when (resp.status.value) {
+            404, 405, 501 -> throw SourceException(SourceException.Reason.OTHER, "Your PC server is too old to write recipes — update it")
+            503 -> throw SourceException(SourceException.Reason.OTHER, detail(resp) ?: "Your PC can't write recipes right now")
+        }
+        ensureOk(resp)
+        return decode { RecipeJson.lenient.decodeFromString(ImportJob.serializer(), resp.bodyAsText()) }
+    }
+
+    @Serializable
+    private data class SubstituteBody(@kotlinx.serialization.SerialName("ingredient_id") val ingredientId: String)
+
+    @Serializable
+    private data class SubstituteAnswer(val suggestions: List<Substitute> = emptyList())
+
+    override suspend fun substitutes(recipeId: String, ingredientId: String): List<Substitute> {
+        val body = RecipeJson.canonical.encodeToString(SubstituteBody.serializer(), SubstituteBody(ingredientId))
+        val resp = call {
+            http.post("$api/recipes/${seg(recipeId)}/substitutes") {
+                auth()
+                contentType(ContentType.Application.Json)
+                setBody(body)
+                // Claude takes a while to think it through (much longer than a normal request).
+                timeout { requestTimeoutMillis = 150_000; socketTimeoutMillis = 150_000 }
+            }
+        }
+        when (resp.status.value) {
+            405, 501 -> throw SourceException(SourceException.Reason.OTHER, "Your PC server is too old for substitutes — update it")
+            404 -> throw SourceException(SourceException.Reason.NOT_FOUND, detail(resp) ?: "Your PC server is too old for substitutes — update it")
+            503 -> throw SourceException(SourceException.Reason.OTHER, detail(resp) ?: "Your PC can't suggest substitutes right now")
+        }
+        ensureOk(resp)
+        return decode { RecipeJson.lenient.decodeFromString(SubstituteAnswer.serializer(), resp.bodyAsText()) }.suggestions
+    }
+
+    /** The server's {"detail": "..."} message, if any. */
+    private suspend fun detail(resp: HttpResponse): String? = runCatching {
+        kotlinx.serialization.json.Json.parseToJsonElement(resp.bodyAsText()).jsonObject["detail"]?.jsonPrimitive?.content
+    }.getOrNull()
 
     override suspend fun importStatus(jobId: String): ImportJob? {
         val resp = call { http.get("$api/imports/${seg(jobId)}") { auth() } }
@@ -141,10 +195,7 @@ class LanServerSource(
             }
         }
         if (resp.status == HttpStatusCode.UnprocessableEntity) {
-            val why = runCatching {
-                kotlinx.serialization.json.Json.parseToJsonElement(resp.bodyAsText())
-                    .jsonObject["detail"]?.jsonPrimitive?.content
-            }.getOrNull()
+            val why = detail(resp)
             throw SourceException(
                 SourceException.Reason.REJECTED,
                 why ?: "The PC didn't accept the change. If you edited the recipe, update the PC server.",

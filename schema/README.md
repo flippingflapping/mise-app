@@ -96,6 +96,12 @@ On read the server merges it in: `cook_notes` replace the recipe's, `reviewed: t
 }
 ```
 
+Also: `added_ingredients` (full ingredients, ids from `9001` up), `removed_ingredients` (ids),
+a step edit's `content` (new wording, same `{0001}` placeholders) and an ingredient edit's
+`short_name` (set when an ingredient is swapped, so the steps name the new one). Removing an
+ingredient comes with step edits that turn its placeholders into plain words, so the recipe stays
+valid.
+
 Served under `user.edits` and **applied by the app**, not by the server: the served recipe stays as
 converted, so every edit can be undone. Ingredients and steps are keyed by id, and each entry is
 the complete editable state of that item: a missing `amount`/`unit`/`amount_max`/`prep` means none

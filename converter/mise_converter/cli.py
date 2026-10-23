@@ -3,6 +3,7 @@
     convert run      [--inbox PATH] [--out PATH] [--batch | --sync] [--force] [--dry-run] [--yes]
     convert status
     convert retry    [--batch | --sync] [--dry-run] [--yes]
+    convert ask      "a quick weeknight dal for 4"   (writes a new recipe)
 """
 
 from __future__ import annotations
@@ -44,6 +45,11 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--dry-run", action="store_true", help="show what would happen; send nothing")
     run.add_argument("--yes", "-y", action="store_true", help="don't ask for confirmation")
     run.add_argument("--no-wait", action="store_true", help="submit a batch and exit without waiting")
+
+    ask = sub.add_parser("ask", help='write a new recipe from a request, e.g. convert ask "a quick dal for 4"')
+    ask.add_argument("request", nargs="+", help="what you'd like to cook, in your own words")
+    ask.add_argument("--out", type=Path, help="recipes folder to write to (default from config)")
+    ask.add_argument("--yes", "-y", action="store_true", help="don't ask for confirmation")
 
     st = sub.add_parser("status", help="show pending / submitted / done / failed / needs review")
     common(st)
@@ -209,20 +215,40 @@ def cmd_status(conv: Converter, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ask(conv: Converter, args: argparse.Namespace) -> int:
+    from .generate import generate_recipe
+
+    request = " ".join(args.request).strip()
+    backend = _backend(conv)
+    print(f"Writing a recipe for: {request}")
+    print(f"With: {backend.label} (model {conv.cfg.converter.model})")
+    if problem := backend.login_problem():
+        sys.exit(problem)
+    if not args.yes and not _confirm("Go ahead?"):
+        print("Cancelled.")
+        return 1
+    result = generate_recipe(conv.cfg, conv.client, request, out_dir=conv.out_dir)
+    if result.recipe_id is None:
+        print("Couldn't write it: " + "; ".join(result.errors[:3]))
+        return 1
+    print(f"Saved {conv.out_dir / (result.recipe_id + '.json')}. It's marked Needs review: check it in the app before cooking.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     cfg = load_config(args.config)
     conv = Converter(
         cfg,
         lambda: _backend(conv).factory(),
-        inbox=args.inbox,
+        inbox=getattr(args, "inbox", None),
         out_dir=args.out,
     )
     conv.backend_choice = args.backend
     conv.inbox.mkdir(parents=True, exist_ok=True)
     conv.out_dir.mkdir(parents=True, exist_ok=True)
     try:
-        return {"run": cmd_run, "status": cmd_status, "retry": cmd_retry}[args.command](conv, args)
+        return {"run": cmd_run, "status": cmd_status, "retry": cmd_retry, "ask": cmd_ask}[args.command](conv, args)
     except KeyboardInterrupt:
         b = conv.manifest.open_batch()
         if b:

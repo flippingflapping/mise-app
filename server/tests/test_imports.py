@@ -103,3 +103,73 @@ def test_server_without_imports_says_so(cfg):
     client = TestClient(create_app(library, TOKEN))
     assert client.get("/api/v1/health").json()["can_import"] is False
     assert client.post("/api/v1/recipes/import", json={"text": RAW}, headers=AUTH).status_code == 501
+
+
+def test_a_request_writes_a_new_recipe_marked_for_review(cfg):
+    fake = OneShotClient(llm_output())
+    client, imports, library = make(cfg, can_convert=True, client=fake)
+    assert client.get("/api/v1/health").json()["can_request"] is True
+    r = client.post("/api/v1/recipes/request", json={"text": "a lamb curry for kothu, for 2"}, headers=AUTH)
+    assert r.status_code == 202 and r.json()["kind"] == "request"
+    imports.wait_idle()
+    job = client.get(f"/api/v1/imports/{r.json()['id']}", headers=AUTH).json()
+    assert job["status"] == "needs_review" and job["recipe_id"]
+    recipe = client.get(f"/api/v1/recipes/{job['recipe_id']}", headers=AUTH).json()
+    assert recipe["status"] == "needs_review"
+    assert recipe["review_flags"][0]["path"] == "source" and "Written by Claude" in recipe["review_flags"][0]["message"]
+    assert recipe["source"] == {"type": "other"}
+    source = client.get(f"/api/v1/recipes/{job['recipe_id']}/source", headers=AUTH)
+    assert "a lamb curry for kothu, for 2" in source.text
+    assert fake.calls == 1
+
+
+def test_requests_need_a_way_to_write(cfg):
+    client, _, _ = make(cfg, can_convert=False)
+    r = client.post("/api/v1/recipes/request", json={"text": "a quick dal"}, headers=AUTH)
+    assert r.status_code == 503 and "Claude Code" in r.json()["detail"]
+    assert client.post("/api/v1/recipes/request", json={"text": "x"}, headers=AUTH).status_code == 422
+
+
+class SubstituteClient:
+    def __init__(self):
+        self.calls = []
+
+    def create(self, params):
+        self.calls.append(params)
+        text = json.dumps({"suggestions": [
+            {"name": "garlic paste", "amount": 1, "unit": "tsp", "note": "Same flavour, a little milder."},
+            {"name": "garlic powder", "amount": 0.25, "unit": "teaspoons", "note": "Stronger: use less."},
+        ]})
+        return LLMResponse(text=text, stop_reason="end_turn", content=[{"type": "text", "text": text}])
+
+
+def test_substitutes_are_suggested_for_the_edited_recipe_and_cached(cfg):
+    cfg.recipes_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES_DIR / "expected" / "sri-lankan-lamb-curry-for-kothu.json", cfg.recipes_dir)
+    fake = SubstituteClient()
+    client, _, _ = make(cfg, can_convert=True, client=fake)
+    rid = "sri-lankan-lamb-curry-for-kothu"
+    assert client.get("/api/v1/health").json()["can_substitute"] is True
+    edits = {"edits": {"ingredients": {"0003": {"name": "minced garlic", "amount": 3, "unit": "tsp"}}}}
+    assert client.put(f"/api/v1/recipes/{rid}/annotations", json=edits, headers=AUTH).status_code == 200
+
+    r = client.post(f"/api/v1/recipes/{rid}/substitutes", json={"ingredient_id": "0003"}, headers=AUTH)
+    assert r.status_code == 200
+    s = r.json()["suggestions"]
+    assert s[0] == {"name": "garlic paste", "amount": 1, "unit": "tsp", "note": "Same flavour, a little milder."}
+    assert s[1]["unit"] is None  # not a unit the app knows: tidied away
+    context = fake.calls[0]["messages"][0]["content"][0]["text"]
+    assert "Substitute for: 3 tsp minced garlic" in context  # the edited amount
+    assert fake.calls[0]["output_config"]["format"]["schema"]["required"] == ["suggestions"]
+
+    again = client.post(f"/api/v1/recipes/{rid}/substitutes", json={"ingredient_id": "0003"}, headers=AUTH)
+    assert again.json() == r.json() and len(fake.calls) == 1  # cached
+    assert client.post(f"/api/v1/recipes/{rid}/substitutes", json={"ingredient_id": "0999"}, headers=AUTH).status_code == 404
+
+
+def test_substitutes_need_a_way_to_ask(cfg):
+    cfg.recipes_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES_DIR / "expected" / "sri-lankan-lamb-curry-for-kothu.json", cfg.recipes_dir)
+    client, _, _ = make(cfg, can_convert=False)
+    r = client.post("/api/v1/recipes/sri-lankan-lamb-curry-for-kothu/substitutes", json={"ingredient_id": "0003"}, headers=AUTH)
+    assert r.status_code == 503 and "Claude Code" in r.json()["detail"]

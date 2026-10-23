@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 
 from mise_shared import SCHEMA_VERSION, __version__
+from mise_shared.edits import apply_edits
 from mise_shared.models import Annotations
 from mise_shared.util import now_iso
 
@@ -31,6 +32,20 @@ def _etag_matches(request: Request, etag: str) -> bool:
         return False
     tags = {t.strip().removeprefix("W/") for t in inm.split(",")}
     return etag in tags or "*" in tags
+
+
+class SubstituteRequest(BaseModel):
+    """Body of POST /recipes/{id}/substitutes."""
+
+    model_config = ConfigDict(extra="forbid")
+    ingredient_id: str = Field(pattern=r"^[0-9]{4}$")
+
+
+class RecipeRequest(BaseModel):
+    """Body of POST /recipes/request: what to cook, in a few words."""
+
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=3, max_length=2000)
 
 
 class ImportRequest(BaseModel):
@@ -103,6 +118,9 @@ def create_app(
             "schema_version": SCHEMA_VERSION,
             "can_import": imports is not None,
             "can_convert": bool(imports and imports.can_convert),
+            # Writing recipes from a request uses the same Claude access as converting.
+            "can_request": bool(imports and imports.can_convert),
+            "can_substitute": bool(imports and imports.can_convert),
             "time": now_iso(),
         }
 
@@ -171,6 +189,30 @@ def create_app(
         if not body.text.strip():
             raise HTTPException(422, "the recipe text is empty")
         return imports.submit(body.text, body.title, body.source).as_dict()
+
+    @app.post("/api/v1/recipes/{rid}/substitutes", dependencies=auth)
+    def substitutes(rid: str, body: SubstituteRequest) -> dict[str, Any]:
+        entry = entry_or_404(rid)
+        if imports is None:
+            raise HTTPException(501, "this server can't suggest substitutes")
+        # Suggest for the recipe as the cook sees it: with their edits applied.
+        recipe = apply_edits(entry.recipe, (entry.recipe.get("user") or {}).get("edits"))
+        try:
+            suggestions = imports.substitutes(recipe, body.ingredient_id)
+        except LookupError as e:
+            raise HTTPException(404, str(e))
+        except RuntimeError as e:
+            raise HTTPException(503, str(e))
+        return {"ingredient_id": body.ingredient_id, "suggestions": suggestions}
+
+    @app.post("/api/v1/recipes/request", dependencies=auth, status_code=202)
+    def request_recipe(body: RecipeRequest) -> dict[str, Any]:
+        if imports is None:
+            raise HTTPException(501, "this server can't take requests")
+        try:
+            return imports.request(body.text).as_dict()
+        except RuntimeError as e:
+            raise HTTPException(503, str(e))
 
     @app.get("/api/v1/imports/{job_id}", dependencies=auth)
     def import_status(job_id: str) -> dict[str, Any]:

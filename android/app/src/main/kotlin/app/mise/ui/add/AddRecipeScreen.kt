@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +32,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -60,7 +66,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class AddMode { PASTE, DESCRIBE }
+
 data class AddRecipeState(
+    val mode: AddMode = AddMode.PASTE,
+    /** For [AddMode.DESCRIBE]: what to cook, in a few words. */
+    val request: String = "",
     val text: String = "",
     val title: String = "",
     val source: String = "",
@@ -71,7 +82,9 @@ data class AddRecipeState(
     val job: ImportJob? = null,
     val error: String? = null,
 ) {
-    val canSend: Boolean get() = usesPc && text.isNotBlank() && !sending && (job == null || job.status == "failed")
+    val canSend: Boolean
+        get() = usesPc && !sending && (job == null || job.status == "failed") &&
+            if (mode == AddMode.PASTE) text.isNotBlank() else request.trim().length >= 3 && features?.canRequest != false
 }
 
 @HiltViewModel(assistedFactory = AddRecipeViewModel.Factory::class)
@@ -99,6 +112,8 @@ class AddRecipeViewModel @AssistedInject constructor(
             .onFailure { e -> _state.update { it.copy(error = e.message ?: "Can't reach your PC") } }
     }
 
+    fun setMode(m: AddMode) = _state.update { it.copy(mode = m, error = null) }
+    fun setRequest(t: String) = _state.update { it.copy(request = t) }
     fun setText(t: String) = _state.update { it.copy(text = t) }
     fun setTitle(t: String) = _state.update { it.copy(title = t) }
     fun setSource(t: String) = _state.update { it.copy(source = t) }
@@ -106,8 +121,9 @@ class AddRecipeViewModel @AssistedInject constructor(
     fun send() = viewModelScope.launch {
         val s = _state.value
         _state.update { it.copy(sending = true, error = null) }
-        repository.importRecipe(s.text, s.title.ifBlank { null }, s.source.ifBlank { null })
-            .onSuccess { job ->
+        val sent = if (s.mode == AddMode.DESCRIBE) repository.requestRecipe(s.request.trim())
+        else repository.importRecipe(s.text, s.title.ifBlank { null }, s.source.ifBlank { null })
+        sent.onSuccess { job ->
                 _state.update { it.copy(sending = false, job = job) }
                 follow(job)
             }
@@ -125,7 +141,7 @@ class AddRecipeViewModel @AssistedInject constructor(
         if (job.recipeId != null) repository.sync()
     }
 
-    fun reset() = _state.update { AddRecipeState(features = it.features, usesPc = it.usesPc) }
+    fun reset() = _state.update { AddRecipeState(mode = it.mode, features = it.features, usesPc = it.usesPc) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -154,6 +170,25 @@ fun AddRecipeScreen(viewModel: AddRecipeViewModel, onBack: () -> Unit, onOpenRec
             if (job != null) {
                 JobStatus(job, onOpen = { job.recipeId?.let(onOpenRecipe) }, onAnother = viewModel::reset)
                 if (job.status != "failed") return@Column
+            }
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                AddMode.entries.forEachIndexed { i, m ->
+                    SegmentedButton(
+                        selected = state.mode == m, onClick = { viewModel.setMode(m) },
+                        shape = SegmentedButtonDefaults.itemShape(i, AddMode.entries.size),
+                    ) { Text(if (m == AddMode.PASTE) "Paste a recipe" else "Describe one") }
+                }
+            }
+            if (state.mode == AddMode.DESCRIBE) {
+                DescribeForm(state, viewModel::setRequest)
+                state.error?.let { Notice(Icons.Outlined.ErrorOutline, "Couldn't ask your PC", it) }
+                Button(
+                    onClick = { gate { viewModel.send() } }, enabled = state.canSend,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                ) {
+                    if (state.sending) CircularProgressIndicator(Modifier.padding(end = 8.dp)) else Text("Ask my PC for a recipe")
+                }
+                return@Column
             }
             Text(
                 "Paste a recipe — straight from a website, a scan or a note. It doesn't need to be tidy: your PC turns it " +
@@ -196,9 +231,44 @@ fun AddRecipeScreen(viewModel: AddRecipeViewModel, onBack: () -> Unit, onOpenRec
     }
 }
 
+private val EXAMPLES = listOf(
+    "A quick weeknight dal for 4",
+    "Something with leftover roast chicken, ready in 30 minutes",
+    "A vegetarian shepherd's pie",
+    "Banana bread without eggs",
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DescribeForm(state: AddRecipeState, onRequest: (String) -> Unit) {
+    Text(
+        "Say what you'd like to cook. Your PC asks Claude to write a recipe in the same format as the rest of your " +
+            "library. It's marked Needs review so you can check it before you cook.",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    if (state.features?.canImport == true && !state.features.canRequest) {
+        Notice(Icons.Outlined.ErrorOutline, "Your PC can't write recipes yet",
+            "Update the PC server, and log in to Claude Code on the PC (or set ANTHROPIC_API_KEY), then restart the server.")
+    }
+    OutlinedTextField(
+        value = state.request, onValueChange = onRequest, label = { Text("What would you like to cook?") },
+        placeholder = { Text("A quick weeknight dal for 4") }, minLines = 3, maxLines = 6, modifier = Modifier.fillMaxWidth(),
+    )
+    Text("Or start from one of these:", style = MaterialTheme.typography.labelLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        EXAMPLES.forEach { e -> SuggestionChip(onClick = { onRequest(e) }, label = { Text(e) }) }
+    }
+}
+
 @Composable
 private fun JobStatus(job: ImportJob, onOpen: () -> Unit, onAnother: () -> Unit) {
-    val (icon, title, body) = when (job.status) {
+    val asked = job.kind == "request"
+    val (icon, title, body) = if (asked) when (job.status) {
+        "queued", "converting" -> Triple(null, "Writing your recipe on your PC…", "This takes a minute or two. You can leave this screen; it'll appear in your library.")
+        "done", "needs_review" -> Triple(Icons.Filled.CheckCircle, "Your recipe is ready",
+            "It's marked Needs review: have a read (and go through the notes) before you cook it.")
+        else -> Triple(Icons.Outlined.ErrorOutline, "Couldn't write it", job.error ?: "Try saying it a different way.")
+    } else when (job.status) {
         "queued", "converting" -> Triple(null, "Converting on your PC…", "This usually takes under a minute. You can leave this screen; it'll appear in your library.")
         "done" -> Triple(Icons.Filled.CheckCircle, "Added to your library", "")
         "needs_review" -> Triple(Icons.Filled.CheckCircle, "Added — please give it a quick check",
@@ -215,7 +285,11 @@ private fun JobStatus(job: ImportJob, onOpen: () -> Unit, onAnother: () -> Unit)
             if (body.isNotBlank()) Text(body, style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (job.recipeId != null) Button(onClick = onOpen) { Text("Open recipe") }
-                if (job.finished) OutlinedButton(onClick = onAnother) { Text(if (job.status == "failed") "Edit and retry" else "Add another") }
+                if (job.finished) {
+                    OutlinedButton(onClick = onAnother) {
+                        Text(if (job.status == "failed") "Edit and retry" else if (asked) "Ask for another" else "Add another")
+                    }
+                }
             }
         }
     }

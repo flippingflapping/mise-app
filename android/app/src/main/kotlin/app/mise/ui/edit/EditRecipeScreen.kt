@@ -208,7 +208,7 @@ fun EditRecipeScreen(viewModel: EditRecipeViewModel, onBack: () -> Unit) {
             item(key = "add-ing") {
                 val groups = recipe.ingredients.mapNotNull { it.group?.takeIf(String::isNotBlank) }.distinct()
                 EditableRow(label = null, value = "+ Add an ingredient", tag = null, isOpen = open == "new", onOpen = { open = "new" }) {
-                    val draft = remember { IngredientDraft(IngredientEdit("")) }
+                    val draft = remember { IngredientDraft(IngredientEdit(name = "")) }
                     var group by rememberSaveable { mutableStateOf(groups.lastOrNull()) }
                     var tried by remember { mutableStateOf(false) }
                     val problems = if (tried) draft.result().second else emptyList()

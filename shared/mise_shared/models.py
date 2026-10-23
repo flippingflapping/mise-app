@@ -109,6 +109,8 @@ class IngredientEdit(_Strict):
     """The complete editable state of one ingredient (absent = none)."""
 
     name: str = Field(min_length=1)
+    #: How it reads in the steps; None = unchanged (or follows the name, if it did).
+    short_name: Optional[str] = Field(default=None, min_length=1)
     prep: Optional[str] = None
     amount: Optional[float] = Field(default=None, gt=0)
     amount_max: Optional[float] = Field(default=None, gt=0)

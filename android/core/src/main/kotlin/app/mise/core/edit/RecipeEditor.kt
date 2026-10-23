@@ -35,7 +35,7 @@ object RecipeEditor {
                 ing.copy(
                     name = e.name,
                     // The short name (used inside step text) followed the name, so keep following it.
-                    shortName = if (ing.shortName == ing.name) e.name else ing.shortName,
+                    shortName = e.shortName?.takeIf { it.isNotBlank() } ?: if (ing.shortName == ing.name) e.name else ing.shortName,
                     prep = e.prep?.takeIf { it.isNotBlank() },
                     amount = e.amount,
                     amountMax = e.amountMax,
@@ -53,7 +53,10 @@ object RecipeEditor {
         )
     }
 
-    fun editOf(ing: Ingredient) = IngredientEdit(ing.name, ing.prep, ing.amount, ing.amountMax, ing.unit, ing.optional)
+    fun editOf(ing: Ingredient) = IngredientEdit(
+        name = ing.name, shortName = ing.shortName, prep = ing.prep,
+        amount = ing.amount, amountMax = ing.amountMax, unit = ing.unit, optional = ing.optional,
+    )
     fun editOf(step: Step) = StepEdit(step.title, step.timerSeconds, step.timerMaxSeconds)
 
     /** The id for a new ingredient: 9001 up, after any I've already added. */

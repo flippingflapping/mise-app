@@ -24,7 +24,7 @@ from .llm_schema import LLM_RECIPE_SCHEMA
 
 #: Short enough to fit anywhere; the real instructions are in the system prompt file.
 SCHEMA_IN_PROMPT_NOTE = (
-    "\n\nReply with only the recipe JSON object (no prose, no code fences). It must match this JSON Schema:\n"
+    "\n\nReply with only the JSON object (no prose, no code fences). It must match this JSON Schema:\n"
 )
 
 
@@ -90,6 +90,11 @@ def flatten_messages(messages: list[dict[str, Any]]) -> str:
     return "\n\n".join(out)
 
 
+def _schema(params: dict[str, Any]) -> dict[str, Any]:
+    """The JSON schema the request asks for (recipes, substitutes…)."""
+    return ((params.get("output_config") or {}).get("format") or {}).get("schema") or LLM_RECIPE_SCHEMA
+
+
 def _system_text(system: Any) -> str:
     return system if isinstance(system, str) else "\n\n".join(b["text"] for b in system if b.get("type") == "text")
 
@@ -132,7 +137,7 @@ class ClaudeCodeClient:
         if effort:
             cmd += ["--effort", effort]
         if self.schema_inline:
-            cmd += ["--json-schema", json.dumps(LLM_RECIPE_SCHEMA, separators=(",", ":"))]
+            cmd += ["--json-schema", json.dumps(_schema(params), separators=(",", ":"))]
         return cmd
 
     def create(self, params: dict[str, Any]) -> LLMResponse:
@@ -141,7 +146,7 @@ class ClaudeCodeClient:
         except ValueError as e:
             return LLMResponse(None, None, error=str(e))
         if not self.schema_inline:
-            prompt += SCHEMA_IN_PROMPT_NOTE + json.dumps(LLM_RECIPE_SCHEMA, separators=(",", ":"))
+            prompt += SCHEMA_IN_PROMPT_NOTE + json.dumps(_schema(params), separators=(",", ":"))
         env = subscription_env()
         with tempfile.TemporaryDirectory(prefix="mise-claude-") as tmp:
             system_file = os.path.join(tmp, "system.md")

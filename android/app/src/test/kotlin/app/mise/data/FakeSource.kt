@@ -51,7 +51,25 @@ class FakeSource(
 
     override suspend fun getSourceText(id: String): String? = sourceText ?: "raw text of $id"
 
-    var features = app.mise.data.source.ServerFeatures(canImport = true, canConvert = true)
+    var features = app.mise.data.source.ServerFeatures(canImport = true, canConvert = true, canRequest = true, canSubstitute = true)
+    val requests = mutableListOf<String>()
+    val substituteAsks = mutableListOf<Pair<String, String>>()
+    var substituteIdeas = listOf(
+        app.mise.data.source.Substitute("garlic paste", 1.0, app.mise.core.model.MeasureUnit.TSP, "Same flavour, a touch milder."),
+        app.mise.data.source.Substitute("leave it out", null, null, "Still good, just less punchy."),
+    )
+
+    override suspend fun requestRecipe(text: String): app.mise.data.source.ImportJob {
+        check()
+        requests += text
+        return app.mise.data.source.ImportJob("job2", "", "queued", kind = "request")
+    }
+
+    override suspend fun substitutes(recipeId: String, ingredientId: String): List<app.mise.data.source.Substitute> {
+        check()
+        substituteAsks += recipeId to ingredientId
+        return substituteIdeas
+    }
     val imports = mutableListOf<String>()
     /** Statuses handed out for successive importStatus calls. */
     var importStatuses = ArrayDeque(listOf("converting", "done"))
@@ -66,7 +84,12 @@ class FakeSource(
 
     override suspend fun importStatus(jobId: String): app.mise.data.source.ImportJob? {
         val status = importStatuses.removeFirstOrNull() ?: "done"
-        return app.mise.data.source.ImportJob(jobId, "from-phone/x.txt", status, recipeId = if (status == "done") "sri-lankan-lamb-curry-for-kothu" else null)
+        val kind = if (jobId == "job2") "request" else "import"
+        val finalStatus = if (kind == "request" && status == "done") "needs_review" else status
+        return app.mise.data.source.ImportJob(
+            jobId, "from-phone/x.txt", finalStatus,
+            recipeId = if (status == "done") "sri-lankan-lamb-curry-for-kothu" else null, kind = kind,
+        )
     }
 
     override suspend fun putAnnotations(id: String, a: Annotations) {
