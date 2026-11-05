@@ -218,3 +218,23 @@ def test_edits_are_stored_served_and_validated(client, folder):
     assert client.get(f"/api/v1/recipes/{RID}", headers=AUTH).json()["user"]["edits"]["yield"]["base_servings"] == 4
     client.put(f"/api/v1/recipes/{RID}/annotations", json={"edits": {}}, headers=AUTH)
     assert "edits" not in client.get(f"/api/v1/recipes/{RID}", headers=AUTH).json()["user"]
+
+
+def test_a_recipe_from_the_phone_is_saved_on_the_pc(client, folder):
+    recipe = json.loads((FIXTURES_DIR / "expected" / f"{RID}.json").read_text(encoding="utf-8"))
+    recipe["id"] = "phone-curry"
+    recipe["user"] = {"favorite": True}  # personal: never written into the recipe file
+    r = client.post("/api/v1/recipes", json={"recipe": recipe, "source_text": "typed on my phone"}, headers=AUTH)
+    assert r.status_code == 201
+    on_disk = json.loads((folder / "phone-curry.json").read_text(encoding="utf-8"))
+    assert "user" not in on_disk and on_disk["title"] == recipe["title"]
+    assert (folder / "phone-curry.source.txt").read_text(encoding="utf-8") == "typed on my phone"
+    assert "phone-curry" in [s["id"] for s in client.get("/api/v1/recipes", headers=AUTH).json()["recipes"]]
+
+    again = client.post("/api/v1/recipes", json={"recipe": recipe}, headers=AUTH)
+    assert again.status_code == 409 and "already" in again.json()["detail"]
+    assert client.post("/api/v1/recipes", json={"recipe": recipe, "replace": True}, headers=AUTH).status_code == 201
+    bad = dict(recipe, id="bad-one", steps=[])
+    assert client.post("/api/v1/recipes", json={"recipe": bad}, headers=AUTH).status_code == 422
+    assert client.post("/api/v1/recipes", json={"recipe": dict(recipe, id="../x")}, headers=AUTH).status_code == 422
+    assert client.post("/api/v1/recipes", json={"recipe": recipe}).status_code == 401

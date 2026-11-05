@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.mise.core.model.RecipeJson
 import app.mise.core.pairing.PairingInfo
 import app.mise.core.pairing.PairingUri
 import app.mise.core.units.UnitMode
@@ -14,22 +15,20 @@ import app.mise.data.settings.Settings
 import app.mise.data.settings.SettingsRepository
 import app.mise.data.settings.SourceKind
 import app.mise.data.settings.ThemeMode
-import app.mise.data.source.FolderImportSource
-import app.mise.data.source.IMPORTED_FILES_ONLY
 import app.mise.data.sync.SyncWorker
 import app.mise.timers.TimerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
-import javax.inject.Inject
 
 sealed interface ConnectionCheck {
     data object Idle : ConnectionCheck
@@ -47,6 +46,11 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
     val settings: StateFlow<Settings> = settingsRepo.settings.stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
     val syncStatus = repository.status
+
+    /** How many recipes are kept only on this phone. */
+    val phoneCount: StateFlow<Int> = repository.library()
+        .map { items -> items.count { it.location == SourceKind.PHONE } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     private val _check = MutableStateFlow<ConnectionCheck>(ConnectionCheck.Idle)
     val check: StateFlow<ConnectionCheck> = _check.asStateFlow()
@@ -94,40 +98,43 @@ class SettingsViewModel @Inject constructor(
 
     fun syncNow() = viewModelScope.launch { repository.sync() }
 
-    fun setSource(kind: SourceKind) = viewModelScope.launch {
-        settingsRepo.setSourceKind(kind)
-        _check.value = ConnectionCheck.Idle
-        repository.sync()
-    }
-
     fun setFolder(uri: Uri) = viewModelScope.launch {
         runCatching {
             context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         settingsRepo.setFolderUri(uri.toString())
-        settingsRepo.setSourceKind(SourceKind.FOLDER)
-        testConnection()
         repository.sync()
     }
 
-    /** Copy picked JSON files (and matching .source.txt files) into the app's own import folder. */
-    fun importFiles(uris: List<Uri>) = viewModelScope.launch {
-        val dir = FolderImportSource.importedDir(context)
-        val copied = withContext(Dispatchers.IO) {
-            uris.count { uri ->
-                runCatching {
-                    val name = displayName(uri) ?: return@runCatching false
-                    if (!(name.endsWith(".json") || name.endsWith(".txt"))) return@runCatching false
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        File(dir, name).outputStream().use { input.copyTo(it) }
-                    } != null
-                }.getOrDefault(false)
-            }
-        }
-        if (settingsRepo.current().folderUri == null) settingsRepo.setFolderUri(IMPORTED_FILES_ONLY)
-        settingsRepo.setSourceKind(SourceKind.FOLDER)
-        _check.value = ConnectionCheck.Ok("Imported $copied file${if (copied == 1) "" else "s"}")
+    /** Its recipes leave the library (recipes kept on the phone and on the PC stay). */
+    fun forgetFolder() = viewModelScope.launch {
+        settingsRepo.setFolderUri(null)
         repository.sync()
+    }
+
+    /** Import picked recipe JSON files (and matching <id>.source.txt files) as recipes kept on this phone. */
+    fun importFiles(uris: List<Uri>) = viewModelScope.launch {
+        val files = withContext(Dispatchers.IO) {
+            uris.mapNotNull { uri ->
+                runCatching {
+                    val name = displayName(uri) ?: return@runCatching null
+                    val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    text?.let { name to it }
+                }.getOrNull()
+            }.toMap()
+        }
+        var imported = 0
+        var unreadable = 0
+        for ((name, text) in files.filterKeys { it.endsWith(".json") && !it.endsWith(".user.json") }) {
+            val recipe = runCatching { RecipeJson.decodeRecipe(text) }.getOrNull()
+            if (recipe == null) { unreadable++; continue }
+            repository.saveOnPhone(recipe, files[name.removeSuffix(".json") + ".source.txt"])
+            imported++
+        }
+        _check.value = ConnectionCheck.Ok(
+            "Imported $imported recipe${if (imported == 1) "" else "s"} to this phone" +
+                if (unreadable > 0) " ($unreadable file${if (unreadable == 1) "" else "s"} couldn't be read)" else "",
+        )
     }
 
     private fun displayName(uri: Uri): String? =

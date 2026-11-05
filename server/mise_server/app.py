@@ -34,6 +34,15 @@ def _etag_matches(request: Request, etag: str) -> bool:
     return etag in tags or "*" in tags
 
 
+class NewRecipe(BaseModel):
+    """Body of POST /recipes: a recipe from the phone (e.g. one kept only on the phone until now)."""
+
+    model_config = ConfigDict(extra="forbid")
+    recipe: dict[str, Any]
+    source_text: str | None = Field(default=None, max_length=MAX_TEXT)
+    replace: bool = False
+
+
 class SubstituteRequest(BaseModel):
     """Body of POST /recipes/{id}/substitutes."""
 
@@ -146,6 +155,16 @@ def create_app(
             "server_time": now_iso(),
         }
         return JSONResponse(body, headers={"ETag": etag, "Cache-Control": "no-cache"})
+
+    @app.post("/api/v1/recipes", dependencies=auth, status_code=201)
+    def add_recipe(body: NewRecipe) -> Response:
+        try:
+            entry = library.add_recipe(body.recipe, body.source_text, replace=body.replace)
+        except FileExistsError as e:
+            raise HTTPException(409, f"there's already a recipe called {e.args[0]!r} on this PC")
+        except ValueError as e:
+            raise HTTPException(422, f"that recipe isn't valid: {e}")
+        return JSONResponse(entry.recipe, status_code=201, headers={"ETag": entry.etag})
 
     @app.get("/api/v1/recipes/{rid}", dependencies=auth)
     def get_recipe(rid: str, request: Request) -> Response:

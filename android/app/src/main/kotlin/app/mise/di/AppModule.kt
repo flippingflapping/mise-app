@@ -68,7 +68,10 @@ object AppModule {
 object SourceModule {
     @Provides
     fun sourceProvider(factory: app.mise.data.source.SourceFactory): app.mise.data.repo.SourceProvider =
-        app.mise.data.repo.SourceProvider(factory::create)
+        object : app.mise.data.repo.SourceProvider {
+            override fun source(settings: app.mise.data.settings.Settings) = factory.create(settings)
+            override fun sources(settings: app.mise.data.settings.Settings) = factory.all(settings)
+        }
 }
 
 @Module

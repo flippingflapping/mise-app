@@ -88,6 +88,32 @@ class LanServerSource(
     }
 
     @Serializable
+    private data class NewRecipe(
+        val recipe: Recipe,
+        @kotlinx.serialization.SerialName("source_text") val sourceText: String? = null,
+        val replace: Boolean = false,
+    )
+
+    override suspend fun addRecipe(recipe: Recipe, sourceText: String?, replace: Boolean): Recipe {
+        val body = RecipeJson.canonical.encodeToString(NewRecipe.serializer(), NewRecipe(recipe.copy(user = null), sourceText, replace))
+        val resp = call {
+            http.post("$api/recipes") {
+                auth()
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+        }
+        when (resp.status.value) {
+            409 -> throw SourceException(SourceException.Reason.CONFLICT, detail(resp) ?: "That recipe is already on your PC")
+            405 -> throw SourceException(SourceException.Reason.OTHER, "Your PC server is too old to take recipes — update it")
+            422 -> throw SourceException(SourceException.Reason.REJECTED, detail(resp) ?: "Your PC didn't accept that recipe")
+        }
+        ensureOk(resp)
+        listCache = null
+        return decode { RecipeJson.decodeRecipe(resp.bodyAsText()) }
+    }
+
+    @Serializable
     private data class RequestBody(val text: String)
 
     override suspend fun requestRecipe(text: String): ImportJob {

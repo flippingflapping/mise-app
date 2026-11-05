@@ -36,6 +36,13 @@ interface RecipeSource {
     suspend fun importRecipe(text: String, title: String?, source: String?): ImportJob =
         throw UnsupportedOperationException("Adding recipes needs the PC server")
 
+    /**
+     * Keep [recipe] here (e.g. one that was only on the phone). Returns it as stored. Throws a
+     * [SourceException] with [SourceException.Reason.CONFLICT] if the id is taken and not [replace].
+     */
+    suspend fun addRecipe(recipe: Recipe, sourceText: String?, replace: Boolean): Recipe =
+        throw UnsupportedOperationException("Only the PC server can take recipes")
+
     /** Ask the PC to write a new recipe from a few words ("a quick dal for 4"). */
     suspend fun requestRecipe(text: String): ImportJob =
         throw UnsupportedOperationException("Asking for recipes needs the PC server")
@@ -97,5 +104,5 @@ data class SourceCapabilities(
 
 /** A source failure, phrased for people. */
 class SourceException(val reason: Reason, message: String, cause: Throwable? = null) : Exception(message, cause) {
-    enum class Reason { UNREACHABLE, UNAUTHORIZED, NOT_FOUND, BAD_DATA, NOT_CONFIGURED, REJECTED, OTHER }
+    enum class Reason { UNREACHABLE, UNAUTHORIZED, NOT_FOUND, BAD_DATA, NOT_CONFIGURED, REJECTED, CONFLICT, OTHER }
 }

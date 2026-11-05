@@ -153,6 +153,10 @@ fun SubstitutesScreen(viewModel: SubstitutesViewModel, onBack: () -> Unit) {
                     "More ideas come from your PC: pair with it in Settings.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                d.sourceKind != SourceKind.LAN -> Text(
+                    "More ideas come from your PC, for recipes kept there. Save this one to your PC first (⋮ → Save to PC).",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
                 state.asking -> Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.padding(end = 12.dp))
                     Text("Asking your PC… this usually takes 10–30 seconds.")

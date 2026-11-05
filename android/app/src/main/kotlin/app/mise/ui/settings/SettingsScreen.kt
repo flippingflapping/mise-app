@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -35,7 +33,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -69,7 +66,6 @@ import app.mise.BuildConfig
 import app.mise.ui.LocalNetworkPermission
 import app.mise.ui.rememberLocalNetworkGate
 import app.mise.core.units.UnitMode
-import app.mise.data.settings.SourceKind
 import app.mise.data.settings.ThemeMode
 import app.mise.data.source.IMPORTED_FILES_ONLY
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -88,6 +84,7 @@ fun SettingsScreen(
     val s by viewModel.settings.collectAsStateWithLifecycle()
     val check by viewModel.check.collectAsStateWithLifecycle()
     val sync by viewModel.syncStatus.collectAsStateWithLifecycle()
+    val phoneCount by viewModel.phoneCount.collectAsStateWithLifecycle()
     val pending by viewModel.pendingPairing.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
@@ -129,59 +126,18 @@ fun SettingsScreen(
             Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()
                 .verticalScroll(rememberScrollState()).padding(bottom = 32.dp),
         ) {
-            Section("Recipes come from")
-            Column(Modifier.selectableGroup()) {
-                SourceKind.entries.forEach { kind ->
-                    val enabled = kind != SourceKind.CLOUD
-                    Row(
-                        Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                            .selectable(selected = s.sourceKind == kind, enabled = enabled, role = Role.RadioButton,
-                                onClick = { viewModel.setSource(kind) })
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = s.sourceKind == kind, onClick = null, enabled = enabled)
-                        Spacer(Modifier.width(12.dp))
-                        Text(kind.label, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-
-            when (s.sourceKind) {
-                SourceKind.LAN -> LanSettings(
-                    serverUrl = s.serverUrl,
-                    token = s.token,
-                    onScan = ::scan,
-                    onSave = { url, token -> gate { viewModel.saveServer(url, token)?.let { toast(it) } } },
-                )
-                SourceKind.FOLDER -> Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Pick a folder that holds your recipe JSON files — e.g. a Syncthing or Google Drive folder, or a copy " +
-                            "of the PC's recipes folder. Works without the PC.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    val folderLabel = when (val f = s.folderUri) {
-                        null -> "No folder chosen"
-                        IMPORTED_FILES_ONLY -> "Imported files only"
-                        else -> f.toUri().lastPathSegment ?: f
-                    }
-                    Text(folderLabel, style = MaterialTheme.typography.labelLarge)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { pickFolder.launch(null) }) {
-                            Icon(Icons.Outlined.Folder, null); Spacer(Modifier.width(8.dp)); Text("Choose folder")
-                        }
-                        OutlinedButton(onClick = { pickFiles.launch(arrayOf("application/json", "text/plain", "*/*")) }) {
-                            Icon(Icons.Outlined.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Import files")
-                        }
-                    }
-                }
-                SourceKind.SAMPLE -> Text(
-                    "Shows the built-in demo recipe. Nothing leaves the phone.",
-                    style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 16.dp),
-                )
-                SourceKind.CLOUD -> {}
-            }
-
+            Text(
+                "Your library combines recipes on your PC, in a folder on this phone, and kept on this phone itself. " +
+                    "Use any of them, or all three.",
+                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp),
+            )
+            Section("Your PC")
+            LanSettings(
+                serverUrl = s.serverUrl,
+                token = s.token,
+                onScan = ::scan,
+                onSave = { url, token -> gate { viewModel.saveServer(url, token)?.let { toast(it) } } },
+            )
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { gate { viewModel.testConnection() } }, enabled = check != ConnectionCheck.Running) {
@@ -196,13 +152,13 @@ fun SettingsScreen(
                     is ConnectionCheck.Ok -> Text("✓ ${c.message}", color = MaterialTheme.colorScheme.primary)
                     is ConnectionCheck.Failed -> {
                         Text("✗ ${c.message}", color = MaterialTheme.colorScheme.error)
-                        if (s.sourceKind == SourceKind.LAN && (localNetworkDenied || LocalNetworkPermission.needed(context))) {
+                        if (s.usesPc && (localNetworkDenied || LocalNetworkPermission.needed(context))) {
                             Text(LocalNetworkPermission.EXPLANATION, style = MaterialTheme.typography.bodyMedium)
                             TextButton(onClick = { context.startActivity(LocalNetworkPermission.appSettingsIntent(context)) }) {
                                 Text("Open app settings")
                             }
                         }
-                        if (s.sourceKind == SourceKind.LAN && c.message.startsWith("Can't reach")) {
+                        if (s.usesPc && c.message.startsWith("Can't reach")) {
                             Text(
                                 "Check that the phone is on the same Wi-Fi, and that the address is your PC's Wi-Fi/Ethernet " +
                                     "address (usually 192.168.x.x). 172.x addresses are often virtual adapters (WSL, Docker) " +
@@ -213,7 +169,7 @@ fun SettingsScreen(
                     }
                     ConnectionCheck.Idle -> {}
                 }
-                if (s.sourceKind == SourceKind.LAN) {
+                if (s.usesPc) {
                     TextButton(onClick = onConnectionCheck) { Text("Can't connect? Run a step-by-step connection check") }
                 }
                 Text(
@@ -223,6 +179,45 @@ fun SettingsScreen(
                 )
                 viewModel.describe(sync.lastResult)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 ToggleRow("Sync in the background", "About every 6 hours on Wi-Fi", s.periodicSync, viewModel::setPeriodicSync)
+            }
+
+            HorizontalDivider()
+            Section("Folder on this phone")
+            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Optional: a folder of recipe JSON files, e.g. a Syncthing or Google Drive folder, or a copy of the PC's " +
+                        "recipes folder. Its recipes join your library; notes on them stay on this phone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                val folderLabel = when (val f = s.folderUri) {
+                    null -> "No folder chosen"
+                    IMPORTED_FILES_ONLY -> "Files imported before (still read)"
+                    else -> f.toUri().lastPathSegment ?: f
+                }
+                Text(folderLabel, style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { pickFolder.launch(null) }) {
+                        Icon(Icons.Outlined.Folder, null); Spacer(Modifier.width(8.dp)); Text(if (s.folderUri == null) "Choose folder" else "Change")
+                    }
+                    if (s.folderUri != null) OutlinedButton(onClick = viewModel::forgetFolder) { Text("Stop using it") }
+                }
+            }
+
+            HorizontalDivider(Modifier.padding(top = 8.dp))
+            Section("On this phone")
+            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    when (phoneCount) {
+                        0 -> "No recipes kept only on this phone."
+                        1 -> "1 recipe kept only on this phone."
+                        else -> "$phoneCount recipes kept only on this phone."
+                    } + " They never leave it unless you choose Save to PC on the recipe (⋮ menu). Recipe JSON files you " +
+                        "import go here too.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedButton(onClick = { pickFiles.launch(arrayOf("application/json", "text/plain", "*/*")) }) {
+                    Icon(Icons.Outlined.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Import recipe files")
+                }
             }
 
             HorizontalDivider()

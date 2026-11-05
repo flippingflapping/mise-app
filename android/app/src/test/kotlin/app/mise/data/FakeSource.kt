@@ -92,6 +92,13 @@ class FakeSource(
         )
     }
 
+    override suspend fun addRecipe(recipe: Recipe, sourceText: String?, replace: Boolean): Recipe {
+        check()
+        if (recipe.id in recipes && !replace) throw SourceException(SourceException.Reason.CONFLICT, "already there")
+        recipes[recipe.id] = recipe.copy(user = null) to "\"up-${recipe.id}\""
+        return recipe.copy(user = null)
+    }
+
     override suspend fun putAnnotations(id: String, a: Annotations) {
         check()
         if (!capabilities.supportsAnnotations) throw UnsupportedOperationException()

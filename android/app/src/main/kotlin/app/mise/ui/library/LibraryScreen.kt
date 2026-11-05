@@ -1,18 +1,9 @@
 package app.mise.ui.library
 
-import androidx.compose.foundation.clickable
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,17 +19,27 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
+import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -152,11 +153,19 @@ fun LibraryScreen(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
-                if (state.tags.isNotEmpty()) item(key = "tags") {
+                if (state.tags.isNotEmpty() || state.hasPhoneRecipes) item(key = "tags") {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        if (state.hasPhoneRecipes) item(key = "phone-only") {
+                            FilterChip(
+                                selected = state.filters.phoneOnly,
+                                onClick = viewModel::togglePhoneOnly,
+                                label = { Text("On this phone") },
+                                leadingIcon = { Icon(Icons.Outlined.PhoneAndroid, null, Modifier.size(18.dp)) },
+                            )
+                        }
                         items(state.tags, key = { it }) { tag ->
                             FilterChip(
                                 selected = tag in state.filters.tags,
@@ -189,7 +198,7 @@ fun LibraryScreen(
                         )
                     }
                 }
-                if (state.source == SourceKind.SAMPLE && !state.loading) item(key = "demo") {
+                if (state.demo && !state.loading) item(key = "demo") {
                     StatusBanner(
                         "This is the built-in demo recipe. Pair with your PC in Settings to see your own library.",
                         Modifier.padding(16.dp, 8.dp).clickable(onClick = onSettings),
@@ -235,6 +244,7 @@ fun LibraryScreen(
                             onClick = { if (picking) viewModel.togglePick(item.id) else onOpen(item.id) },
                             onLongClick = { viewModel.togglePick(item.id) },
                             onReview = if (picking) null else ({ onReview(item.id) }),
+                            showLocation = state.mixed,
                         )
                         HorizontalDivider(Modifier.padding(start = 16.dp))
                     }
@@ -263,12 +273,22 @@ private fun RecipeRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onReview: (() -> Unit)? = null,
+    /** Label recipes that aren't on the PC ("On this phone", "In your folder"). */
+    showLocation: Boolean = false,
 ) {
     val needsReview = item.status == RecipeStatus.NEEDS_REVIEW
     ListItem(
         leadingContent = picked?.let { { Checkbox(checked = it, onCheckedChange = null) } },
         headlineContent = { Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-        supportingContent = if (item.tags.isEmpty()) null else ({ Text(item.tags.joinToString(" · "), maxLines = 1) }),
+        supportingContent = run {
+            val where = when (item.location) {
+                SourceKind.PHONE -> "On this phone"
+                SourceKind.FOLDER -> "In your folder"
+                else -> null
+            }?.takeIf { showLocation }
+            val line = listOfNotNull(where, item.tags.joinToString(" · ").ifEmpty { null }).joinToString(" · ")
+            if (line.isEmpty()) null else ({ Text(line, maxLines = 1) })
+        },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (needsReview) {

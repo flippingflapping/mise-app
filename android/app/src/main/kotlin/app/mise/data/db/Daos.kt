@@ -17,6 +17,8 @@ data class LibraryRow(
     val reviewed: Boolean?,
     val lastCooked: String?,
     val editsJson: String? = null,
+    /** Where it's kept: a [app.mise.data.settings.SourceKind] name. */
+    val sourceKind: String = "LAN",
 )
 
 @Dao
@@ -24,7 +26,8 @@ interface RecipeDao {
     @Query(
         """
         SELECT r.id, r.title, r.tags, r.ingredient_names AS ingredientNames, r.status,
-               a.favorite, a.reviewed, a.last_cooked AS lastCooked, a.edits_json AS editsJson
+               a.favorite, a.reviewed, a.last_cooked AS lastCooked, a.edits_json AS editsJson,
+               r.source_kind AS sourceKind
         FROM recipes r LEFT JOIN annotations a ON a.recipe_id = r.id
         ORDER BY r.title COLLATE NOCASE
         """,
@@ -51,6 +54,9 @@ interface RecipeDao {
 
     @Query("SELECT COUNT(*) FROM recipes")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM recipes WHERE source_kind = :kind")
+    suspend fun countOf(kind: String): Int
 }
 
 @Dao
@@ -66,6 +72,9 @@ interface AnnotationDao {
 
     @Upsert
     suspend fun upsert(entity: AnnotationEntity)
+
+    @Query("DELETE FROM annotations WHERE recipe_id = :id")
+    suspend fun delete(id: String)
 
     /** Read-modify-write in one transaction. */
     @Transaction
@@ -84,6 +93,9 @@ interface ViewStateDao {
 
     @Upsert
     suspend fun upsert(entity: ViewStateEntity)
+
+    @Query("DELETE FROM view_state WHERE recipe_id = :id")
+    suspend fun delete(id: String)
 
     @Transaction
     suspend fun update(id: String, change: (ViewStateEntity) -> ViewStateEntity) {

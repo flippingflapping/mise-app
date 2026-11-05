@@ -7,6 +7,8 @@ enum class SourceKind(val label: String) {
     FOLDER("Folder on this phone"),
     SAMPLE("Demo recipe"),
     CLOUD("Cloud (coming later)"),
+    /** Recipes that belong to the phone itself (imported files, copies). Never removed by a sync. */
+    PHONE("On this phone"),
 }
 
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
@@ -27,14 +29,21 @@ data class Settings(
 ) {
     val lanConfigured: Boolean get() = serverUrl.isNotBlank() && token.isNotBlank()
 
+    /** Paired with the PC: its recipes are in the library, and PC-only features work. */
+    val usesPc: Boolean get() = lanConfigured
+
+    /** A folder on the phone (or legacy imported files) adds its recipes to the library. */
+    val usesFolder: Boolean get() = folderUri != null
+
     /**
-     * The source that actually feeds the library. Until the PC is paired (or a folder chosen),
-     * the bundled demo recipe is shown so the app is never empty.
+     * The main source: the PC when paired, else the folder, else the bundled demo (so the app is
+     * never empty). The library combines the PC, the folder and recipes kept on the phone; see
+     * [app.mise.data.repo.SourceProvider.sources]. ([sourceKind] is from when only one could be used.)
      */
     val effectiveSource: SourceKind
-        get() = when (sourceKind) {
-            SourceKind.LAN -> if (lanConfigured) SourceKind.LAN else SourceKind.SAMPLE
-            SourceKind.FOLDER -> if (folderUri != null) SourceKind.FOLDER else SourceKind.SAMPLE
-            else -> sourceKind
+        get() = when {
+            usesPc -> SourceKind.LAN
+            usesFolder -> SourceKind.FOLDER
+            else -> SourceKind.SAMPLE
         }
 }

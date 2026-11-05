@@ -42,6 +42,8 @@ data class DetailUiState(
     val related: List<RelatedRecipe> = emptyList(),
     val timers: List<KitchenTimer> = emptyList(),
     val notesSyncToPc: Boolean = false,
+    /** Paired with a PC (so a phone recipe can be saved to it). */
+    val paired: Boolean = false,
 ) {
     val factor: Double get() = detail?.factor ?: 1.0
     val servings: Double get() = (detail?.recipe?.recipeYield?.baseServings ?: 1.0) * factor
@@ -83,6 +85,7 @@ class RecipeDetailViewModel @AssistedInject constructor(
             },
             timers = allTimers,
             notesSyncToPc = detail?.sourceKind == SourceKind.LAN,
+            paired = s.usesPc,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
 
@@ -135,6 +138,16 @@ class RecipeDetailViewModel @AssistedInject constructor(
     }
 
     fun markReviewed() = viewModelScope.launch { repository.markReviewed(recipeId) }
+
+    /** An independent copy kept on this phone; returns its id. */
+    suspend fun keepCopyOnPhone(): String? = repository.keepCopyOnPhone(recipeId)
+
+    suspend fun saveToPc(replace: Boolean = false): RecipeRepository.SaveToPc = repository.saveToPc(recipeId, replace)
+
+    fun deleteFromPhone(then: () -> Unit) = viewModelScope.launch {
+        repository.deleteFromPhone(recipeId)
+        then()
+    }
     fun dismissFlags() = viewModelScope.launch { repository.dismissFlags(recipeId) }
     fun setCookNotes(notes: List<String>) = viewModelScope.launch { repository.setCookNotes(recipeId, notes) }
     fun madeThis() = viewModelScope.launch { repository.madeThis(recipeId) }

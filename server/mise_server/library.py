@@ -22,7 +22,7 @@ from typing import Any, Iterable
 
 from mise_shared.edits import edit_errors
 from mise_shared.models import Annotations
-from mise_shared.util import now_iso, write_json_atomic
+from mise_shared.util import now_iso, write_json_atomic, write_text_atomic
 from mise_shared.validation import validate_recipe
 
 log = logging.getLogger("mise.library")
@@ -219,6 +219,30 @@ class RecipeLibrary:
         return None
 
     # ------------------------------------------------------------------ writes
+
+    def add_recipe(self, recipe: dict[str, Any], source_text: str | None = None, *, replace: bool = False) -> LibraryEntry:
+        """Write a recipe sent from the phone as <id>.json (and its original text). Raises FileExistsError
+        if the id is taken (unless `replace`), ValueError if the recipe isn't valid."""
+        data = {k: v for k, v in recipe.items() if k != "user"}  # personal notes go in the sidecar, not here
+        rid = data.get("id")
+        if not isinstance(rid, str) or not SLUG.match(rid):
+            raise ValueError("the recipe needs an id made of lowercase letters, digits and dashes")
+        result = validate_recipe(data)
+        if not result.ok:
+            raise ValueError("; ".join(result.errors[:5]))
+        with self._lock:
+            path = self.folder / f"{rid}.json"
+            if path.exists() and not replace:
+                raise FileExistsError(rid)
+            if source_text and source_text.strip():
+                write_text_atomic(self.folder / f"{rid}.source.txt", source_text)
+            data["updated_at"] = now_iso()
+            write_json_atomic(path, data)
+        self.reload([rid])
+        entry = self.get(rid)
+        if entry is None:  # pragma: no cover - only if the file vanished at once
+            raise ValueError("the recipe couldn't be read back")
+        return entry
 
     def save_annotations(self, rid: str, update: Annotations) -> LibraryEntry:
         """Merge the fields present in `update` into <id>.user.json. The recipe file is untouched.

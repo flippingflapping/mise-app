@@ -38,6 +38,7 @@ import app.mise.ui.theme.MiseTheme
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -62,6 +63,7 @@ class ScreensTest {
     private lateinit var repo: RecipeRepository
     private lateinit var timers: TimerController
     private val settings = FakeSettings()
+    private val source = FakeSource()
     private val id = "sri-lankan-lamb-curry-for-kothu"
 
     @Before fun setUp() {
@@ -71,7 +73,7 @@ class ScreensTest {
             .setQueryExecutor(direct).setTransactionExecutor(direct).build()
         // Android 13+: as if the user already allowed notifications (timers ask on first use).
         org.robolectric.Shadows.shadowOf(context).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
-        val source = FakeSource().apply { put(TestFixtures.lamb, "\"v1\"") }
+        source.put(TestFixtures.lamb, "\"v1\"")
         repo = RecipeRepository(
             db, db.recipes(), db.annotations(), db.viewState(), db.sourceTexts(), settings,
             SourceProvider { source }, Clock { System.currentTimeMillis() }, CoroutineScope(Dispatchers.Unconfined),
@@ -202,11 +204,44 @@ class ScreensTest {
         waitFor("No matches")
     }
 
+    @Test fun phoneAndPcRecipesTogether() {
+        runBlocking {
+            repo.saveOnPhone(TestFixtures.lamb.copy(id = "phone-dal", title = "Dal from my phone", tags = listOf("lentils")))
+            repo.sync()
+        }
+        val lib = LibraryViewModel(repo, settings)
+        show { LibraryWithDetail(lib, onOpenFullScreen = {}, onSettings = {}) { _, _ -> } }
+        waitFor("Dal from my phone")
+        compose.onNodeWithText("On this phone · lentils").assertIsDisplayed() // labelled when the library is mixed
+        compose.onAllNodesWithText("On this phone")[0].performClick() // the filter chip
+        waitGone("Sri Lankan Lamb Curry for Kothu")
+        screenshot("library-mixed")
+    }
+
+    @Test fun savePhoneRecipeToPc() {
+        runBlocking {
+            repo.saveOnPhone(TestFixtures.lamb.copy(id = "phone-dal", title = "Dal from my phone"))
+            repo.sync()
+        }
+        val vm = RecipeDetailViewModel("phone-dal", repo, settings.also { it.state.value = it.state.value.copy(serverUrl = "http://pc:8765", token = "t") }, timers)
+        show { Detail(vm) }
+        waitFor("Dal from my phone")
+        compose.onNodeWithContentDescription("More").performClick()
+        waitFor("Kept on this phone only")
+        screenshot("recipe-menu")
+        compose.onNodeWithText("Save to PC").performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("Saved to your PC", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        assertThat(runBlocking { repo.detail("phone-dal").first()!!.sourceKind }).isEqualTo(app.mise.data.settings.SourceKind.LAN)
+        assertThat(source.recipes.keys).contains("phone-dal")
+    }
+
     @Test fun settingsAndPairingConfirmation() {
         val context = ApplicationProvider.getApplicationContext<android.app.Application>()
         val vm = app.mise.ui.settings.SettingsViewModel(context, app.mise.data.settings.SettingsRepository(context), repo, timers)
         show { app.mise.ui.settings.SettingsScreen(vm, pairingLink = null, onBack = {}) }
-        waitFor("Recipes come from")
+        waitFor("Your PC")
         compose.onNodeWithText("Pair with PC").assertIsDisplayed()
         compose.onNodeWithText("Server address").assertIsDisplayed() // manual entry until paired
         screenshot("settings")

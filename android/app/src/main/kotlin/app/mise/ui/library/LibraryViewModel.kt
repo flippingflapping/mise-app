@@ -21,8 +21,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class LibraryFilters(val query: String = "", val tags: Set<String> = emptySet(), val favoritesOnly: Boolean = false) {
-    val active: Boolean get() = query.isNotBlank() || tags.isNotEmpty() || favoritesOnly
+data class LibraryFilters(
+    val query: String = "",
+    val tags: Set<String> = emptySet(),
+    val favoritesOnly: Boolean = false,
+    /** Only recipes kept on this phone (not on the PC yet). */
+    val phoneOnly: Boolean = false,
+) {
+    val active: Boolean get() = query.isNotBlank() || tags.isNotEmpty() || favoritesOnly || phoneOnly
 }
 
 data class LibraryUiState(
@@ -35,6 +41,11 @@ data class LibraryUiState(
     val refreshing: Boolean = false,
     val banner: String? = null,
     val source: SourceKind = SourceKind.SAMPLE,
+    /** Some recipes are kept on the phone (or in a folder) as well as on the PC: label them. */
+    val mixed: Boolean = false,
+    val hasPhoneRecipes: Boolean = false,
+    /** Only the built-in demo recipe is showing. */
+    val demo: Boolean = false,
     /** Recipes picked (long-press) for a shopping list or meal plan, in the order picked. */
     val picked: List<String> = emptyList(),
 )
@@ -53,6 +64,7 @@ class LibraryViewModel @Inject constructor(
         val docs = all.associateWith { SearchDoc(it.title, it.tags, it.ingredientNames) }
         val filtered = all
             .filter { !f.favoritesOnly || it.favorite }
+            .filter { !f.phoneOnly || it.location == SourceKind.PHONE }
             .filter { item -> f.tags.all { t -> t in item.tags } }
             .map { it to RecipeSearch.score(docs.getValue(it), f.query) }
             .filter { it.second > 0 }
@@ -71,6 +83,9 @@ class LibraryViewModel @Inject constructor(
             refreshing = status.running,
             banner = bannerFor(status.lastResult, s),
             source = s.effectiveSource,
+            mixed = all.map { it.location }.distinct().size > 1,
+            hasPhoneRecipes = all.any { it.location == SourceKind.PHONE },
+            demo = all.isNotEmpty() && all.all { it.location == SourceKind.SAMPLE },
             picked = pick.filter { id -> all.any { it.id == id } },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
@@ -83,6 +98,7 @@ class LibraryViewModel @Inject constructor(
     fun setQuery(q: String) = filters.update { it.copy(query = q) }
     fun toggleTag(tag: String) = filters.update { it.copy(tags = if (tag in it.tags) it.tags - tag else it.tags + tag) }
     fun toggleFavorites() = filters.update { it.copy(favoritesOnly = !it.favoritesOnly) }
+    fun togglePhoneOnly() = filters.update { it.copy(phoneOnly = !it.phoneOnly) }
     fun clearFilters() = filters.update { LibraryFilters() }
     fun togglePick(id: String) = picked.update { if (id in it) it - id else it + id }
     fun clearPicks() = picked.update { emptyList() }
@@ -91,7 +107,7 @@ class LibraryViewModel @Inject constructor(
         val failed = result as? SyncResult.Failed ?: return null
         return when (failed.reason) {
             SourceException.Reason.UNREACHABLE ->
-                if (s.effectiveSource == SourceKind.LAN) "Can't reach your PC — showing cached recipes"
+                if (s.usesPc) "Can't reach your PC — showing cached recipes"
                 else "${failed.message} — showing cached recipes"
             SourceException.Reason.UNAUTHORIZED -> "Your PC rejected the access token. Pair again in Settings."
             else -> "${failed.message}. Showing cached recipes."

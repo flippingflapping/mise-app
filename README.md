@@ -129,7 +129,7 @@ is `convert ask "a quick weeknight dal for 4"`.
   automatic conversion is on, and with what.
 * Otherwise the text just waits in the inbox until you next run `convert run`.
 
-Either way the phone never sees any key or login. Adding recipes needs the PC server (not folder mode).
+Either way the phone never sees any key or login. Adding recipes needs the PC server.
 
 ---
 
@@ -201,11 +201,30 @@ Either way the phone never sees any key or login. Adding recipes needs the PC se
 Step times come from the recipe's timers; steps without a timer get an estimate, so treat the plan as
 a guide and leave a little slack. Shopping lists and meal plans are stored on the phone only.
 
-### Without the PC: folder mode
+### Recipes on the PC, on the phone, or both
 
-Settings → *Recipes come from* → **Folder on this phone**, then **Choose folder** (e.g. a Syncthing or
-Google Drive folder that mirrors the PC's `recipes/` folder) or **Import files** for individual
-`.json` files. Notes you make in folder mode stay on the phone.
+Your library combines up to three places, all at once (Settings shows each):
+
+* **Your PC** (once paired): synced, and kept on the phone too so they work offline. Notes and
+  edits sync back to the PC.
+* **Folder on this phone** (optional): **Choose folder**, e.g. a Syncthing or Google Drive folder. Its
+  recipes join the library; notes on them stay on the phone.
+* **On this phone**: recipes that belong to the phone itself. **Import recipe files** (`.json`) puts
+  them here, and so does *Keep a copy on this phone*. Syncing never removes them.
+
+When the library mixes places, recipes not on the PC say so ("On this phone"), and an **On this
+phone** filter chip lists them. Each recipe's **⋮** menu says where it's kept and moves it:
+
+* **Save to PC** (a phone or folder recipe): uploads it to the PC's `recipes/` folder. From then on
+  it's a PC recipe, still available offline, with your notes and edits carried over. If the PC
+  already has a recipe with that name, Mise asks before replacing it.
+* **Keep a copy on this phone** (a PC, folder or demo recipe): an independent copy with your edits
+  baked in. It stays if the original is deleted or you unpair, and changes to one don't touch the other.
+* **Delete from this phone** (phone recipes only; PC recipes are managed on the PC).
+
+If the same recipe id turns up in two places, the phone's own copy wins, then the PC, then the folder:
+a folder that mirrors the PC's `recipes/` doesn't fight it. Substitute ideas, recipe requests and
+conversions need the PC, so for a phone recipe, Save to PC first.
 
 ---
 

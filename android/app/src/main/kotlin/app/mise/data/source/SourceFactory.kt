@@ -19,13 +19,27 @@ class SourceFactory @Inject constructor(
     @ApplicationContext private val context: Context,
     private val http: HttpClient,
 ) {
-    private var cached: Pair<String, RecipeSource>? = null
+
+    private val cache = HashMap<String, RecipeSource>()
+
+    /** The main source (see [Settings.effectiveSource]). */
+    fun create(settings: Settings): RecipeSource = of(settings.effectiveSource, settings)
+
+    /** Everything the library combines: the PC if paired, the folder if chosen; the demo if neither. */
+    fun all(settings: Settings): List<RecipeSource> = buildList {
+        if (settings.usesPc) add(of(SourceKind.LAN, settings))
+        if (settings.usesFolder) add(of(SourceKind.FOLDER, settings))
+        if (isEmpty()) add(of(SourceKind.SAMPLE, settings))
+    }
 
     @Synchronized
-    fun create(settings: Settings): RecipeSource {
-        val kind = settings.effectiveSource
-        val key = "$kind|${settings.serverUrl}|${settings.token}|${settings.folderUri}"
-        cached?.takeIf { it.first == key }?.let { return it.second }
+    private fun of(kind: SourceKind, settings: Settings): RecipeSource {
+        val key = when (kind) {
+            SourceKind.LAN -> "LAN|${settings.serverUrl}|${settings.token}"
+            SourceKind.FOLDER -> "FOLDER|${settings.folderUri}"
+            else -> kind.name
+        }
+        cache[key]?.let { return it }
         val source = when (kind) {
             SourceKind.LAN -> LanServerSource(http, settings.serverUrl, settings.token)
             SourceKind.FOLDER -> FolderImportSource(
@@ -36,8 +50,10 @@ class SourceFactory @Inject constructor(
             )
             SourceKind.SAMPLE -> BundledSampleSource(context.assets)
             SourceKind.CLOUD -> CloudApiSource()
+            SourceKind.PHONE -> error("recipes on the phone live in the database, not a source")
         }
-        cached = key to source
+        cache.keys.removeAll { it.startsWith(kind.name + "|") } // drop the old PC/folder when it changes
+        cache[key] = source
         return source
     }
 }

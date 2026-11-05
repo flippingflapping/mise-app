@@ -387,3 +387,16 @@ app yet: step wording (placeholders make free-text editing error-prone), adding/
   The Claude Code backend now takes the JSON schema from each request (not always the recipe one).
 * Verified for real through Claude Code: a request ("red lentil dal for 4, mild") produced a valid,
   sensible recipe with useful flags; substitutes for the oil came back in ~6 s, cached after.
+
+**Combined library: PC + phone + folder, and moving recipes between them.** The single "Recipes come
+from" choice is gone: the library is the PC (when paired) + a folder (when chosen) + recipes owned by
+the phone (`SourceKind.PHONE`, Room-only, never removed by a sync); the demo appears only when there's
+nothing else. Sync runs per source and each removes only its own recipes; one failing doesn't stop the
+others (the failure is still reported). Same id in two places: PHONE > LAN > FOLDER, so a folder that
+mirrors the PC's recipes can't flap with it. Annotations are pushed only for the source's own recipes.
+PC-only features (convert, request, substitutes, features) talk to the PC source explicitly.
+Moving: *Save to PC* = `POST /api/v1/recipes` (validated, 409 on a taken id unless `replace`, writes
+`<id>.json` + source text; `user` is never written into the file), after which the row becomes a PC
+recipe and its annotations are pushed. *Keep a copy on this phone* forks to `<id>-phone` with edits
+baked in and notes copied. Imported JSON files become phone recipes (files imported by older versions
+are still read through the folder source). No Room migration needed: `source_kind` already existed.

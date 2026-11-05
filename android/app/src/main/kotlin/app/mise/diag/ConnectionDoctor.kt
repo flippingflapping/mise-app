@@ -8,7 +8,6 @@ import android.os.Build
 import app.mise.BuildConfig
 import app.mise.data.repo.RecipeRepository
 import app.mise.data.settings.SettingsStore
-import app.mise.data.settings.SourceKind
 import app.mise.data.source.LanServerSource
 import app.mise.ui.LocalNetworkPermission
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -55,9 +54,6 @@ class ConnectionDoctor @Inject constructor(
                 "${Build.MANUFACTURER} ${Build.MODEL}",
         ))
 
-        if (s.sourceKind != SourceKind.LAN) {
-            add(DiagStep("Recipes come from", DiagStep.Status.WARN, "${s.sourceKind.label}, not the PC server. Change it at the top of Settings."))
-        }
         val uri = runCatching { URI(s.serverUrl.trim()) }.getOrNull()
         val host = uri?.host
         val port = uri?.port?.takeIf { it > 0 } ?: 8765
