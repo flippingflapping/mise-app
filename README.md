@@ -155,6 +155,16 @@ Either way the phone never sees any key or login. Adding recipes needs the PC se
   edits. Your edits are kept separately from the converted recipe (in `recipes/<id>.user.json` on the
   PC), so **Back to original** / **Undo all my edits** always work, and re-reading the recipe file
   never loses them.
+* **Tips:** the ✨ **Tips** button on a recipe asks Claude on your PC for 4–6 ideas to make it turn
+  out better or easier (technique, flavour, time-savers, make-ahead, serving), specific to this
+  recipe ("in step 5, cook the onion past translucent"). **Add to my notes** keeps one in My notes.
+  Answers are remembered, so opening it again is instant.
+* **Photos:** **Add a photo** on a recipe: take one or choose one from your gallery. It's shrunk to
+  a sensible size; for a PC recipe it's saved on the PC (as `recipes/<id>.photo.jpg`, which wins over
+  any other image and never overwrites your files), for a phone recipe it stays on the phone. Either
+  way it shows offline. Tap the camera button on the photo to change or remove it.
+* **Plan a meal from a recipe:** ⋮ → **Plan a meal** (or **Make a shopping list**) starts a plan with
+  that recipe; long-press in the library to plan several dishes at once.
 * **Swap an ingredient:** the ⇄ next to an ingredient. It shows the recipe's own suggestion, and
   **Ask for ideas** gets a few swaps from Claude on your PC, sized for this recipe, with a note on
   what changes ("dried thyme: use a third as much"). **Use this** swaps it in as an edit, so the

@@ -173,3 +173,36 @@ def test_substitutes_need_a_way_to_ask(cfg):
     client, _, _ = make(cfg, can_convert=False)
     r = client.post("/api/v1/recipes/sri-lankan-lamb-curry-for-kothu/substitutes", json={"ingredient_id": "0003"}, headers=AUTH)
     assert r.status_code == 503 and "Claude Code" in r.json()["detail"]
+
+
+class TipClient:
+    def __init__(self):
+        self.calls = []
+
+    def create(self, params):
+        self.calls.append(params)
+        text = json.dumps({"tips": [
+            {"kind": "technique", "title": "Brown in batches", "detail": "In step 2, brown the lamb in two batches so it sears."},
+            {"kind": "nonsense", "title": "Lime at the end", "detail": "A squeeze of lime lifts it."},
+            {"kind": "serving", "title": "", "detail": "dropped: no title"},
+        ]})
+        return LLMResponse(text=text, stop_reason="end_turn", content=[{"type": "text", "text": text}])
+
+
+def test_tips_for_the_edited_recipe_are_cached(cfg):
+    cfg.recipes_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES_DIR / "expected" / "sri-lankan-lamb-curry-for-kothu.json", cfg.recipes_dir)
+    fake = TipClient()
+    client, _, _ = make(cfg, can_convert=True, client=fake)
+    rid = "sri-lankan-lamb-curry-for-kothu"
+    assert client.get("/api/v1/health").json()["can_tip"] is True
+    client.put(f"/api/v1/recipes/{rid}/annotations", json={"edits": {"title": "My kothu curry"}}, headers=AUTH)
+    r = client.post(f"/api/v1/recipes/{rid}/tips", headers=AUTH)
+    assert r.status_code == 200
+    tips = r.json()["tips"]
+    assert [t["title"] for t in tips] == ["Brown in batches", "Lime at the end"]
+    assert tips[1]["kind"] == "technique"  # unknown kinds are tidied
+    sent = fake.calls[0]["messages"][0]["content"][0]["text"]
+    assert sent.startswith("Recipe: My kothu curry") and "{0001} = 500 g lamb" in sent
+    assert client.post(f"/api/v1/recipes/{rid}/tips", headers=AUTH).json() == r.json() and len(fake.calls) == 1
+    assert client.post("/api/v1/recipes/nope/tips", headers=AUTH).status_code == 404

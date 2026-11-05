@@ -92,6 +92,25 @@ class FakeSource(
         )
     }
 
+    val photos = mutableMapOf<String, ByteArray>()
+    var tipsToGive = listOf(
+        app.mise.data.source.Tip("technique", "Brown in batches", "In step 2, brown the lamb in two batches so it sears."),
+        app.mise.data.source.Tip("serving", "Finish with lime", "A squeeze of lime just before serving lifts it."),
+    )
+
+    override suspend fun tips(recipeId: String): List<app.mise.data.source.Tip> { check(); return tipsToGive }
+
+    override suspend fun getImage(id: String): ByteArray? = photos[id]
+
+    override suspend fun setPhoto(id: String, jpeg: ByteArray?): Recipe {
+        check()
+        if (jpeg == null) photos.remove(id) else photos[id] = jpeg
+        val (r, etag) = recipes.getValue(id)
+        val served = r.copy(image = if (jpeg == null) null else "$id.photo.jpg")
+        recipes[id] = served to etag
+        return served
+    }
+
     override suspend fun addRecipe(recipe: Recipe, sourceText: String?, replace: Boolean): Recipe {
         check()
         if (recipe.id in recipes && !replace) throw SourceException(SourceException.Reason.CONFLICT, "already there")

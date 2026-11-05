@@ -47,6 +47,13 @@ interface RecipeSource {
     suspend fun requestRecipe(text: String): ImportJob =
         throw UnsupportedOperationException("Asking for recipes needs the PC server")
 
+    /** Set (or with null, remove) the photo taken on the phone. Returns the recipe as now served. */
+    suspend fun setPhoto(id: String, jpeg: ByteArray?): Recipe =
+        throw UnsupportedOperationException("Only the PC server keeps photos")
+
+    /** Tips for making the recipe better, for the recipe as I've edited it (PC server only). */
+    suspend fun tips(recipeId: String): List<Tip> = throw UnsupportedOperationException("Tips need the PC server")
+
     /** Ideas for swapping one ingredient, sized for the recipe as I've edited it (PC server only). */
     suspend fun substitutes(recipeId: String, ingredientId: String): List<Substitute> =
         throw UnsupportedOperationException("Substitute ideas need the PC server")
@@ -60,6 +67,10 @@ interface RecipeSource {
         return "Connected — $n recipe${if (n == 1) "" else "s"} available"
     }
 }
+
+/** One tip: a kind (technique, flavour, time-saver, make-ahead, serving, equipment), a title and a detail. */
+@kotlinx.serialization.Serializable
+data class Tip(val kind: String = "technique", val title: String, val detail: String)
 
 /** One swap idea: what to use instead, how much (for the recipe as written), and what changes. */
 @kotlinx.serialization.Serializable
@@ -77,6 +88,8 @@ data class ServerFeatures(
     val canRequest: Boolean = false,
     /** Can suggest substitutes for an ingredient. */
     val canSubstitute: Boolean = false,
+    /** Can suggest tips for a recipe. */
+    val canTip: Boolean = false,
 )
 
 @kotlinx.serialization.Serializable

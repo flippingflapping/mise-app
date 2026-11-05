@@ -8,6 +8,7 @@ import app.mise.data.settings.SourceKind
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -58,6 +59,7 @@ class LanServerSource(
         val can_convert: Boolean = false,
         val can_request: Boolean = false,
         val can_substitute: Boolean = false,
+        val can_tip: Boolean = false,
     )
 
     @Serializable
@@ -67,7 +69,7 @@ class LanServerSource(
         val resp = call { http.get("$api/health") }
         ensureOk(resp)
         val h = decode { RecipeJson.lenient.decodeFromString(Health.serializer(), resp.bodyAsText()) }
-        return ServerFeatures(h.can_import, h.can_convert, h.can_request, h.can_substitute)
+        return ServerFeatures(h.can_import, h.can_convert, h.can_request, h.can_substitute, h.can_tip)
     }
 
     override suspend fun importRecipe(text: String, title: String?, source: String?): ImportJob {
@@ -157,6 +159,46 @@ class LanServerSource(
         }
         ensureOk(resp)
         return decode { RecipeJson.lenient.decodeFromString(SubstituteAnswer.serializer(), resp.bodyAsText()) }.suggestions
+    }
+
+    override suspend fun setPhoto(id: String, jpeg: ByteArray?): Recipe {
+        val resp = call {
+            if (jpeg == null) {
+                http.delete("$api/recipes/${seg(id)}/photo") { auth() }
+            } else {
+                http.put("$api/recipes/${seg(id)}/photo") {
+                    auth()
+                    contentType(ContentType.Image.JPEG)
+                    setBody(jpeg)
+                    timeout { requestTimeoutMillis = 60_000; socketTimeoutMillis = 60_000 } // a few hundred KB over Wi-Fi
+                }
+            }
+        }
+        when (resp.status.value) {
+            405 -> throw SourceException(SourceException.Reason.OTHER, "Your PC server is too old for photos — update it")
+            422 -> throw SourceException(SourceException.Reason.REJECTED, detail(resp) ?: "Your PC didn't accept that photo")
+        }
+        ensureOk(resp)
+        listCache = null
+        return decode { RecipeJson.decodeRecipe(resp.bodyAsText()) }
+    }
+
+    @Serializable
+    private data class TipsAnswer(val tips: List<Tip> = emptyList())
+
+    override suspend fun tips(recipeId: String): List<Tip> {
+        val resp = call {
+            http.post("$api/recipes/${seg(recipeId)}/tips") {
+                auth()
+                timeout { requestTimeoutMillis = 150_000; socketTimeoutMillis = 150_000 } // Claude takes a while
+            }
+        }
+        when (resp.status.value) {
+            404, 405, 501 -> throw SourceException(SourceException.Reason.OTHER, "Your PC server is too old for tips — update it")
+            503 -> throw SourceException(SourceException.Reason.OTHER, detail(resp) ?: "Your PC can't suggest tips right now")
+        }
+        ensureOk(resp)
+        return decode { RecipeJson.lenient.decodeFromString(TipsAnswer.serializer(), resp.bodyAsText()) }.tips
     }
 
     /** The server's {"detail": "..."} message, if any. */

@@ -34,13 +34,18 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -123,6 +128,9 @@ fun RecipeDetailScreen(
     onEdit: () -> Unit = {},
     onReview: () -> Unit = {},
     onSubstitutes: (ingredientId: String) -> Unit = {},
+    /** kind is "meal" (timed plan, Calm or Pro) or "shopping". */
+    onPlan: (kind: String) -> Unit = {},
+    onTips: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val image by viewModel.image.collectAsStateWithLifecycle()
@@ -134,6 +142,11 @@ fun RecipeDetailScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmReplace by remember { mutableStateOf(false) }
+    var photoMenu by remember { mutableStateOf(false) }
+    val photoPicker = rememberPhotoPicker(
+        onPhoto = { jpeg -> scope.launch { viewModel.setPhoto(jpeg)?.let { snackbar.showSnackbar(it) } } },
+        onError = { msg -> scope.launch { snackbar.showSnackbar(msg) } },
+    )
     val saveToPc: (Boolean) -> Unit = { replace ->
         scope.launch {
             snackbar.showSnackbar(
@@ -182,6 +195,8 @@ fun RecipeDetailScreen(
                                     }
                                 },
                                 onDelete = { menuOpen = false; confirmDelete = true },
+                                onPlanMeal = { menuOpen = false; onPlan("meal") },
+                                onShoppingList = { menuOpen = false; onPlan("shopping") },
                             )
                         }
                     }
@@ -226,11 +241,33 @@ fun RecipeDetailScreen(
         ) {
             image?.let { img ->
                 item(key = "image") {
-                    Image(img, contentDescription = "Photo of ${recipe.title}", contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                    Box {
+                        Image(img, contentDescription = "Photo of ${recipe.title}", contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                        Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                            FilledTonalIconButton(onClick = { photoMenu = true }) { Icon(Icons.Outlined.PhotoCamera, "Change photo") }
+                            PhotoMenu(photoMenu, { photoMenu = false }, photoPicker, onRemove = {
+                                scope.launch { viewModel.setPhoto(null)?.let { snackbar.showSnackbar(it) } }
+                            })
+                        }
+                    }
                 }
             }
-            item(key = "header") { Header(recipe, state.servings, factor) }
+            item(key = "header") {
+                Header(recipe, state.servings, factor) {
+                    FilledTonalButton(onClick = onTips) {
+                        Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Tips")
+                    }
+                    if (image == null) {
+                        Box {
+                            OutlinedButton(onClick = { photoMenu = true }) {
+                                Icon(Icons.Outlined.PhotoCamera, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add a photo")
+                            }
+                            PhotoMenu(photoMenu, { photoMenu = false }, photoPicker, onRemove = null)
+                        }
+                    }
+                }
+            }
             if (recipe.advancePrep.isNotEmpty()) item(key = "advance") { AdvancePrepBanner(recipe.advancePrep) }
             if (showFlags) {
                 item(key = "flags") {
@@ -397,7 +434,7 @@ private fun SectionTitle(text: String, trailing: (@Composable () -> Unit)? = nul
 }
 
 @Composable
-private fun Header(recipe: Recipe, servings: Double, factor: Double) {
+private fun Header(recipe: Recipe, servings: Double, factor: Double, actions: @Composable () -> Unit = {}) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(recipe.title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
         recipe.description?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
@@ -415,6 +452,7 @@ private fun Header(recipe: Recipe, servings: Double, factor: Double) {
         if (recipe.tags.isNotEmpty()) {
             Text(recipe.tags.joinToString(" · "), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) { actions() }
     }
 }
 
@@ -723,8 +761,21 @@ private fun WhereMenu(
     onSaveToPc: () -> Unit,
     onKeepCopy: () -> Unit,
     onDelete: () -> Unit,
+    onPlanMeal: () -> Unit,
+    onShoppingList: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text("Plan a meal (timed, Calm or Pro)") },
+            leadingIcon = { Icon(Icons.Outlined.Schedule, null) },
+            onClick = onPlanMeal,
+        )
+        DropdownMenuItem(
+            text = { Text("Make a shopping list") },
+            leadingIcon = { Icon(Icons.Outlined.ShoppingCart, null) },
+            onClick = onShoppingList,
+        )
+        HorizontalDivider()
         val where = when (kind) {
             SourceKind.LAN -> "Kept on your PC"
             SourceKind.PHONE -> "Kept on this phone only"
@@ -751,6 +802,26 @@ private fun WhereMenu(
                 text = { Text("Delete from this phone") },
                 leadingIcon = { Icon(Icons.Outlined.Delete, null) },
                 onClick = onDelete,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PhotoMenu(expanded: Boolean, onDismiss: () -> Unit, picker: PhotoPicker, onRemove: (() -> Unit)?) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text("Take a photo") }, leadingIcon = { Icon(Icons.Outlined.PhotoCamera, null) },
+            onClick = { onDismiss(); picker.takePhoto() },
+        )
+        DropdownMenuItem(
+            text = { Text("Choose from your photos") }, leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) },
+            onClick = { onDismiss(); picker.choosePhoto() },
+        )
+        onRemove?.let { remove ->
+            DropdownMenuItem(
+                text = { Text("Remove photo") }, leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                onClick = { onDismiss(); remove() },
             )
         }
     }

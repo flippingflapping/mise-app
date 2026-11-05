@@ -96,6 +96,7 @@ class ImportQueue:
         self._queue: queue.Queue[str] = queue.Queue()
         self._worker: threading.Thread | None = None
         self._finder = None  # SubstituteFinder, made on first use
+        self._tips = None  # TipFinder, made on first use
 
     # ------------------------------------------------------------------ API
 
@@ -145,6 +146,19 @@ class ImportQueue:
         if not self.can_convert or self._client_factory is None:
             raise RuntimeError("this PC can't suggest substitutes: log in to Claude Code or set ANTHROPIC_API_KEY")
         return self._finder.find(self._client_factory(), recipe, ingredient_id)
+
+    def tips(self, recipe: dict[str, Any]) -> list[dict[str, Any]]:
+        """Tips for making the recipe better (cached). Runs on the caller's thread."""
+        from mise_converter.tips import TipFinder
+
+        if self._tips is None:
+            self._tips = TipFinder(self.cfg.state_dir, self.cfg.converter.model)
+        cached = self._tips.cached(recipe)
+        if cached is not None:
+            return cached
+        if not self.can_convert or self._client_factory is None:
+            raise RuntimeError("this PC can't suggest tips: log in to Claude Code or set ANTHROPIC_API_KEY")
+        return self._tips.find(self._client_factory(), recipe)
 
     def get(self, job_id: str) -> ImportJob | None:
         with self._lock:

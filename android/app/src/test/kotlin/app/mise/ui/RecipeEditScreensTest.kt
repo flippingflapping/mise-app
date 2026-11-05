@@ -32,6 +32,8 @@ import app.mise.ui.edit.ReviewScreen
 import app.mise.ui.edit.ReviewViewModel
 import app.mise.ui.edit.SubstitutesScreen
 import app.mise.ui.edit.SubstitutesViewModel
+import app.mise.ui.edit.TipsScreen
+import app.mise.ui.edit.TipsViewModel
 import app.mise.ui.edit.excerpt
 import app.mise.ui.theme.MiseTheme
 import com.google.common.truth.Truth.assertThat
@@ -207,5 +209,16 @@ class RecipeEditScreensTest {
         assertThat(garlic.name).isEqualTo("garlic paste")
         assertThat(garlic.shortName).isEqualTo("garlic paste") // so the steps say it too
         assertThat(source.substituteAsks.single()).isEqualTo(id to "0003")
+    }
+
+    @Test fun tipsFromThePcGoIntoMyNotes() {
+        val vm = TipsViewModel(id, repo, FakeSettings())
+        show { TipsScreen(vm, onBack = {}) }
+        waitFor("Brown in batches")
+        compose.onNodeWithText("Technique").assertExists()
+        screenshot("tips")
+        compose.onAllNodesWithText("Add to my notes")[0].performClick()
+        waitFor("In My notes")
+        assertThat(recipe().cookNotes).contains("Brown in batches: In step 2, brown the lamb in two batches so it sears.")
     }
 }

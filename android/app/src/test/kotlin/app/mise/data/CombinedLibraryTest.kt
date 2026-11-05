@@ -136,4 +136,46 @@ class CombinedLibraryTest {
         repo.sync()
         assertThat(where().keys).containsExactly("mine")
     }
+
+    @Test fun photosLiveWithTheRecipe() = runTest {
+        repo.sync()
+        val jpeg = byteArrayOf(-1, -40, -1, 1, 2, 3)
+        // A PC recipe's photo is saved on the PC, and kept here for offline use.
+        assertThat(repo.setPhoto(lamb.id, jpeg).isSuccess).isTrue()
+        assertThat(pc.photos[lamb.id]).isEqualTo(jpeg)
+        assertThat(repo.image(lamb.id)).isEqualTo(jpeg)
+        pc.unreachable = true
+        assertThat(repo.image(lamb.id)).isEqualTo(jpeg) // offline
+        pc.unreachable = false
+
+        // A phone recipe's photo stays on the phone… until it's saved to the PC, when it goes too.
+        val id = repo.saveOnPhone(lamb.copy(id = "phone-pie"))
+        repo.setPhoto(id, jpeg)
+        assertThat(pc.photos).doesNotContainKey(id)
+        repo.saveToPc(id)
+        assertThat(pc.photos[id]).isEqualTo(jpeg)
+
+        // A copy keeps the photo; deleting the copy removes it.
+        val copy = repo.keepCopyOnPhone(lamb.id)!!
+        assertThat(repo.image(copy)).isEqualTo(jpeg)
+        repo.deleteFromPhone(copy)
+        assertThat(repo.image(copy)).isNull()
+
+        // Removing it.
+        repo.setPhoto(lamb.id, null)
+        assertThat(pc.photos).doesNotContainKey(lamb.id)
+        assertThat(repo.image(lamb.id)).isNull()
+    }
+
+    @Test fun tipsCanBeKeptInMyNotes() = runTest {
+        repo.sync()
+        val tips = repo.tips(lamb.id).getOrThrow()
+        assertThat(tips.map { it.title }).containsExactly("Brown in batches", "Finish with lime").inOrder()
+        repo.addTipToNotes(lamb.id, tips[0])
+        repo.addTipToNotes(lamb.id, tips[0]) // only once
+        val notes = repo.detail(lamb.id).first()!!.cookNotes
+        assertThat(notes.count { it.startsWith("Brown in batches:") }).isEqualTo(1)
+        val phone = repo.saveOnPhone(lamb.copy(id = "phone-pie"))
+        assertThat(repo.tips(phone).exceptionOrNull()?.message).contains("Save this one to your PC first")
+    }
 }

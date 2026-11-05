@@ -37,6 +37,8 @@ import app.mise.ui.edit.ReviewScreen
 import app.mise.ui.edit.ReviewViewModel
 import app.mise.ui.edit.SubstitutesScreen
 import app.mise.ui.edit.SubstitutesViewModel
+import app.mise.ui.edit.TipsScreen
+import app.mise.ui.edit.TipsViewModel
 import app.mise.ui.settings.ConnectionCheckScreen
 import app.mise.ui.settings.SettingsScreen
 import app.mise.ui.add.AddRecipeScreen
@@ -59,6 +61,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class EditRoute(val id: String)
 @Serializable data class ReviewRoute(val id: String)
 @Serializable data class SubstitutesRoute(val id: String, val ingredientId: String)
+@Serializable data class TipsRoute(val id: String)
 @Serializable data class SettingsRoute(val pairingLink: String? = null)
 @Serializable data object ConnectionCheckRoute
 @Serializable data class AddRecipeRoute(val text: String? = null, val subject: String? = null)
@@ -127,6 +130,8 @@ fun MiseNavHost(launch: LaunchRequest?, onLaunchHandled: () -> Unit, nav: NavHos
                     onEdit = { nav.navigate(EditRoute(id)) },
                     onReview = { nav.navigate(ReviewRoute(id)) },
                     onSubstitutes = { ing -> nav.navigate(SubstitutesRoute(id, ing)) },
+                    onPlan = { kind -> nav.navigate(NewPlanRoute(kind, id)) },
+                    onTips = { nav.navigate(TipsRoute(id)) },
                 )
             }
         }
@@ -142,7 +147,13 @@ fun MiseNavHost(launch: LaunchRequest?, onLaunchHandled: () -> Unit, nav: NavHos
                 onEdit = { nav.navigate(EditRoute(id)) },
                 onReview = { nav.navigate(ReviewRoute(id)) },
                 onSubstitutes = { ing -> nav.navigate(SubstitutesRoute(id, ing)) },
+                onPlan = { kind -> nav.navigate(NewPlanRoute(kind, id)) },
+                onTips = { nav.navigate(TipsRoute(id)) },
             )
+        }
+        composable<TipsRoute> { entry ->
+            val id = entry.toRoute<TipsRoute>().id
+            TipsScreen(hiltViewModel<TipsViewModel, TipsViewModel.Factory> { it.create(id) }, onBack = { nav.popBackStack() })
         }
         composable<SubstitutesRoute> { entry ->
             val r = entry.toRoute<SubstitutesRoute>()

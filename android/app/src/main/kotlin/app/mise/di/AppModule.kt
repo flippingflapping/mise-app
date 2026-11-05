@@ -55,6 +55,9 @@ object AppModule {
             .addMigrations(*MiseDatabase.MIGRATIONS)
             .build()
 
+    @Provides @Singleton
+    fun photoStore(@ApplicationContext context: Context): app.mise.photos.PhotoStore = app.mise.photos.FilePhotoStore(context)
+
     @Provides fun recipeDao(db: MiseDatabase): RecipeDao = db.recipes()
     @Provides fun annotationDao(db: MiseDatabase): AnnotationDao = db.annotations()
     @Provides fun viewStateDao(db: MiseDatabase): ViewStateDao = db.viewState()

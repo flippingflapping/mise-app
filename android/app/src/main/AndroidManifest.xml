@@ -70,6 +70,17 @@
             android:name=".plans.FeastReminderReceiver"
             android:exported="false" />
 
+        <!-- Lets the camera app write a photo taken for a recipe (TakePicture needs a content:// URI). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- WorkManager is initialised by MiseApp (Hilt worker factory). -->
         <provider
             android:name="androidx.startup.InitializationProvider"

@@ -113,7 +113,8 @@ fun MealPlansScreen(viewModel: MealPlansViewModel, onBack: () -> Unit, onOpen: (
             all == null -> {}
             all.isEmpty() -> EmptyState(
                 Icons.Filled.Schedule, "No meal plans yet",
-                "In your recipes, long-press one recipe, tap the others you're making, then tap Plan a meal and pick a serve time.",
+                "Open a recipe and choose ⋮ → Plan a meal. For several dishes, long-press one recipe in your library, " +
+                    "tap the others you're making, then tap Plan a meal. You pick the time to eat, and Calm (prep first) or Pro (multitask).",
                 Modifier.padding(padding),
             )
             else -> LazyColumn(Modifier.fillMaxSize().padding(padding)) {

@@ -88,6 +88,25 @@ class LanServerSourceTest {
         assertThat(e.message).contains("too old")
     }
 
+    @Test fun photosAndTips() = runTest {
+        val s = source { req ->
+            when {
+                req.url.encodedPath.endsWith("/tips") ->
+                    respond("""{"tips":[{"kind":"flavour","title":"Lime","detail":"Add lime."}]}""", HttpStatusCode.OK, json)
+                else -> respond(TestFixtures.lambJson, HttpStatusCode.OK, json)
+            }
+        }
+        val jpeg = byteArrayOf(-1, -40, -1, 9)
+        s.setPhoto("lamb", jpeg)
+        assertThat(requests[0].method).isEqualTo(HttpMethod.Put)
+        assertThat(requests[0].url.encodedPath).isEqualTo("/api/v1/recipes/lamb/photo")
+        assertThat(requests[0].body.contentType.toString()).isEqualTo("image/jpeg")
+        s.setPhoto("lamb", null)
+        assertThat(requests[1].method).isEqualTo(HttpMethod.Delete)
+        assertThat(s.tips("lamb").single().title).isEqualTo("Lime")
+        assertThat(requests[2].url.encodedPath).isEqualTo("/api/v1/recipes/lamb/tips")
+    }
+
     @Test fun rejectedEditsSayWhy() = runTest {
         val s = source { respond("""{"detail":"those edits would break the recipe: x"}""", HttpStatusCode.UnprocessableEntity, json) }
         val e = runCatching { s.putAnnotations("x", Annotations(edits = app.mise.core.model.RecipeEdits(title = "t"))) }

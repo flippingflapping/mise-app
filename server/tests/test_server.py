@@ -238,3 +238,20 @@ def test_a_recipe_from_the_phone_is_saved_on_the_pc(client, folder):
     assert client.post("/api/v1/recipes", json={"recipe": bad}, headers=AUTH).status_code == 422
     assert client.post("/api/v1/recipes", json={"recipe": dict(recipe, id="../x")}, headers=AUTH).status_code == 422
     assert client.post("/api/v1/recipes", json={"recipe": recipe}).status_code == 401
+
+
+def test_photos_from_the_phone(client, folder, library):
+    jpeg = b"\xff\xd8\xff\xe0" + b"\x00" * 100 + b"\xff\xd9"
+    (folder / f"{RID}.png").write_bytes(b"\x89PNG old image")  # an image the user already had
+    library.reload([RID])  # (the folder watcher isn't running in tests)
+    assert client.get(f"/api/v1/recipes/{RID}", headers=AUTH).json()["image"] == f"{RID}.png"
+    r = client.put(f"/api/v1/recipes/{RID}/photo", content=jpeg, headers={**AUTH, "Content-Type": "image/jpeg"})
+    assert r.status_code == 200 and r.json()["image"] == f"{RID}.photo.jpg"
+    assert client.get(f"/api/v1/recipes/{RID}/image", headers=AUTH).content == jpeg
+    assert (folder / f"{RID}.png").exists()  # never overwritten
+    assert client.put(f"/api/v1/recipes/{RID}/photo", content=b"not a jpeg", headers=AUTH).status_code == 422
+    assert client.put("/api/v1/recipes/nope/photo", content=jpeg, headers=AUTH).status_code == 404
+    r = client.delete(f"/api/v1/recipes/{RID}/photo", headers=AUTH)
+    assert r.json()["image"] == f"{RID}.png"  # back to the old one
+    assert not (folder / f"{RID}.photo.jpg").exists()
+    assert id_for_path(folder / f"{RID}.photo.jpg") == RID  # the watcher reloads the recipe

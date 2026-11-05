@@ -400,3 +400,18 @@ Moving: *Save to PC* = `POST /api/v1/recipes` (validated, 409 on a taken id unle
 recipe and its annotations are pushed. *Keep a copy on this phone* forks to `<id>-phone` with edits
 baked in and notes copied. Imported JSON files become phone recipes (files imported by older versions
 are still read through the folder source). No Room migration needed: `source_kind` already existed.
+
+**Tips, photos, and planning from a recipe.**
+* Tips: `POST /recipes/{id}/tips`, one structured-output call (4–6 tips, kind/title/detail) on the recipe
+  with edits applied; cached in `recipes/.mise/tips.json` keyed by the recipe's content. Substitutes and
+  tips now share `mise_converter/assist.py` (recipe-as-text, JSON cache, ask_json). App: a Tips button in
+  the recipe header; "Add to my notes" appends "title: detail" to My notes (synced as usual). Real check
+  through Claude Code: 6 specific, step-referencing tips in ~9 s.
+* Photos: `PUT`/`DELETE /recipes/{id}/photo` (JPEG only, ≤15 MB) writes `<id>.photo.jpg`, preferred
+  over a named or `<id>.<ext>` image and never overwriting them; the watcher maps it to the recipe. App:
+  camera (TakePicture via a FileProvider in cache/camera) or the photo picker (no permission), shrunk to
+  ≤1600 px JPEG q85 with EXIF rotation (ImageDecoder on API 28+). Photos live in a PhotoStore on the phone:
+  the photo of a phone recipe, and an offline copy of PC photos (dropped when the recipe changes on the
+  PC). Save to PC uploads the photo; Keep a copy copies it; deleting a phone recipe removes it.
+* Calm/Pro was already there (build 12+) but only reachable through long-press → Plan a meal; the
+  recipe's ⋮ menu now has Plan a meal / Make a shopping list for that recipe.

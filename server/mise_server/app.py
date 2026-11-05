@@ -130,6 +130,7 @@ def create_app(
             # Writing recipes from a request uses the same Claude access as converting.
             "can_request": bool(imports and imports.can_convert),
             "can_substitute": bool(imports and imports.can_convert),
+            "can_tip": bool(imports and imports.can_convert),
             "time": now_iso(),
         }
 
@@ -187,7 +188,23 @@ def create_app(
         path = library.image_path(rid, entry.recipe)
         if path is None:
             raise HTTPException(404, "no image for this recipe")
-        return FileResponse(path, headers={"Cache-Control": "max-age=3600"})
+        return FileResponse(path, headers={"Cache-Control": "no-cache"})  # a photo can be replaced
+
+    @app.put("/api/v1/recipes/{rid}/photo", dependencies=auth)
+    async def put_photo(rid: str, request: Request) -> Response:
+        entry_or_404(rid)
+        body = await request.body()
+        try:
+            entry = library.set_photo(rid, body)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        return JSONResponse(entry.recipe, headers={"ETag": entry.etag})
+
+    @app.delete("/api/v1/recipes/{rid}/photo", dependencies=auth)
+    def delete_photo(rid: str) -> Response:
+        entry_or_404(rid)
+        entry = library.set_photo(rid, None)
+        return JSONResponse(entry.recipe, headers={"ETag": entry.etag})
 
     @app.put("/api/v1/recipes/{rid}/annotations", dependencies=auth)
     def put_annotations(rid: str, body: Annotations) -> Response:
@@ -223,6 +240,17 @@ def create_app(
         except RuntimeError as e:
             raise HTTPException(503, str(e))
         return {"ingredient_id": body.ingredient_id, "suggestions": suggestions}
+
+    @app.post("/api/v1/recipes/{rid}/tips", dependencies=auth)
+    def tips(rid: str) -> dict[str, Any]:
+        entry = entry_or_404(rid)
+        if imports is None:
+            raise HTTPException(501, "this server can't suggest tips")
+        recipe = apply_edits(entry.recipe, (entry.recipe.get("user") or {}).get("edits"))
+        try:
+            return {"tips": imports.tips(recipe)}
+        except RuntimeError as e:
+            raise HTTPException(503, str(e))
 
     @app.post("/api/v1/recipes/request", dependencies=auth, status_code=202)
     def request_recipe(body: RecipeRequest) -> dict[str, Any]:

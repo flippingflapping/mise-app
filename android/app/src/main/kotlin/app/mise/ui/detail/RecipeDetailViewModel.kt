@@ -91,14 +91,23 @@ class RecipeDetailViewModel @AssistedInject constructor(
 
     init {
         viewModelScope.launch {
-            val d = repository.detail(recipeId).filterNotNull().first()
-            if (d.recipe.image != null) {
-                val bytes = repository.image(recipeId) ?: return@launch
-                _image.value = withContext(Dispatchers.Default) {
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                }
-            }
+            repository.detail(recipeId).filterNotNull().first()
+            loadImage()
         }
+    }
+
+    private suspend fun loadImage() {
+        val bytes = repository.image(recipeId)
+        _image.value = bytes?.let {
+            withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
+        }
+    }
+
+    /** Set (or with null, remove) the photo. Returns a problem to show, or null. */
+    suspend fun setPhoto(jpeg: ByteArray?): String? {
+        val result = repository.setPhoto(recipeId, jpeg)
+        loadImage()
+        return result.exceptionOrNull()?.let { it.message ?: "Couldn't save the photo" }
     }
 
     private fun setServings(target: Double) {

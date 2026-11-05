@@ -1,6 +1,5 @@
 package app.mise.data.repo
 
-import androidx.room.withTransaction
 import app.mise.core.edit.RecipeEditor
 import app.mise.core.edit.StepText
 import app.mise.core.model.Annotations
@@ -30,6 +29,9 @@ import app.mise.data.source.RecipeSource
 import app.mise.data.source.SourceException
 import app.mise.di.ApplicationScope
 import app.mise.di.Clock
+import app.mise.photos.InMemoryPhotoStore
+import app.mise.photos.PhotoStore
+import androidx.room.withTransaction
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -123,6 +125,7 @@ class RecipeRepository @Inject constructor(
     private val sources: SourceProvider,
     private val clock: Clock,
     @ApplicationScope private val appScope: CoroutineScope,
+    private val photos: PhotoStore = InMemoryPhotoStore(),
 ) {
     private val syncMutex = Mutex()
     private val _pushProblem = MutableStateFlow<String?>(null)
@@ -263,6 +266,9 @@ class RecipeRepository @Inject constructor(
             cachedAt = clock.now(),
             image = recipe.image,
         )
+        // A changed PC/folder recipe may have a new photo: drop the copy kept for offline use.
+        val old = recipes.get(recipe.id)
+        if (kind != SourceKind.PHONE && old != null && old.sourceKind == kind.name && old.etag != etag) photos.delete(recipe.id)
         db.withTransaction {
             recipes.upsert(entity)
             // The source's view of my annotations wins unless I have unpushed local changes.
@@ -458,7 +464,7 @@ class RecipeRepository @Inject constructor(
             text?.let { sourceTexts.upsert(SourceTextEntity(copyId, it, clock.now())) }
             d.annotation?.let { a -> annotations.upsert(a.copy(recipeId = copyId, editsJson = null, dirty = false)) }
             copyId
-        }
+        }.also { copyId -> image(id)?.let { photos.put(copyId, it) } }
     }
 
     sealed interface SaveToPc {
@@ -482,6 +488,7 @@ class RecipeRepository @Inject constructor(
             return if (e.reason == SourceException.Reason.CONFLICT) SaveToPc.AlreadyThere
             else SaveToPc.Failed(e.message ?: "Couldn't save it to your PC")
         }
+        photos.get(id)?.let { jpeg -> runCatching { pc.setPhoto(id, jpeg) } } // its photo goes too
         syncMutex.withLock {
             store(served, SourceKind.LAN, etag = null) // the same recipe, now kept on the PC
             if (annotations.get(id) != null) annotations.update(id) { it.copy(dirty = true, updatedAt = clock.now()) }
@@ -499,6 +506,7 @@ class RecipeRepository @Inject constructor(
             annotations.delete(id)
             viewState.delete(id)
         }
+        photos.delete(id)
     }
 
     // ------------------------------------------------------------------ extras
@@ -524,7 +532,26 @@ class RecipeRepository @Inject constructor(
         }
     }
 
-    suspend fun image(id: String): ByteArray? = runCatching { sourceFor(id)?.getImage(id) }.getOrNull()
+    /** The recipe's photo: the copy on the phone, else fetched (and kept for offline use). */
+    suspend fun image(id: String): ByteArray? {
+        photos.get(id)?.let { return it }
+        val row = recipes.get(id) ?: return null
+        if (RecipeJson.decodeRecipe(row.json).image == null) return null // nothing to fetch
+        return runCatching { sourceFor(id)?.getImage(id) }.getOrNull()?.also { photos.put(id, it) }
+    }
+
+    /**
+     * Set (or with null, remove) a recipe's photo. A PC recipe's photo is saved on the PC (so it's
+     * there for good); others keep it on this phone.
+     */
+    suspend fun setPhoto(id: String, jpeg: ByteArray?): Result<Unit> = runCatching {
+        val row = recipes.get(id) ?: throw SourceException(SourceException.Reason.NOT_FOUND, "That recipe isn't here any more")
+        if (row.sourceKind == SourceKind.LAN.name) {
+            val served = pc().setPhoto(id, jpeg)
+            syncMutex.withLock { store(served, SourceKind.LAN, etag = null) }
+        }
+        if (jpeg == null) photos.delete(id) else photos.put(id, jpeg)
+    }
 
     suspend fun testConnection(s: Settings): Result<String> = runCatching { sources.source(s).testConnection() }
 
@@ -541,6 +568,23 @@ class RecipeRepository @Inject constructor(
         }
         syncMutex.withLock { pushAnnotations(source) }
         source.substitutes(id, ingredientId)
+    }
+
+    /** Tips from the PC for making the recipe better (my edits pushed first, so they fit what I see). */
+    suspend fun tips(id: String): Result<List<app.mise.data.source.Tip>> = runCatching {
+        val source = pc()
+        if (recipes.get(id)?.sourceKind != SourceKind.LAN.name) {
+            throw SourceException(SourceException.Reason.OTHER, "Tips work for recipes on your PC. Save this one to your PC first.")
+        }
+        syncMutex.withLock { pushAnnotations(source) }
+        source.tips(id)
+    }
+
+    /** Keep a tip in My notes ("Brown in batches: …"). */
+    suspend fun addTipToNotes(id: String, tip: app.mise.data.source.Tip) {
+        val current = detail(id).first()?.cookNotes.orEmpty()
+        val note = "${tip.title}: ${tip.detail}"
+        if (note !in current) setCookNotes(id, current + note)
     }
 
     /** Use a swap idea: it becomes an ordinary edit of that ingredient ("leave it out" removes it). */

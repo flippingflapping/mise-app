@@ -29,7 +29,10 @@ log = logging.getLogger("mise.library")
 
 SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
-_SUFFIXES = (".user.json", ".source.txt", ".json") + IMAGE_EXTS
+#: A photo added from the phone: preferred over any other image, and never overwrites your files.
+PHOTO_SUFFIX = ".photo.jpg"
+MAX_PHOTO_BYTES = 15_000_000
+_SUFFIXES = (".user.json", ".source.txt", PHOTO_SUFFIX, ".json") + IMAGE_EXTS
 
 
 def id_for_path(path: Path) -> str | None:
@@ -129,7 +132,7 @@ class RecipeLibrary:
         sidecar = self._read_sidecar(rid)
         merged = self._merge(data, sidecar)
         img = self.image_path(rid, merged)
-        if img and "image" not in merged:
+        if img and ("image" not in merged or img.name.endswith(PHOTO_SUFFIX)):
             merged["image"] = img.name
 
         updated = _parse_time(data.get("updated_at")) or datetime.fromtimestamp(stat.st_mtime, timezone.utc)
@@ -208,6 +211,9 @@ class RecipeLibrary:
         return path.read_text(encoding="utf-8") if path.exists() else None
 
     def image_path(self, rid: str, recipe: dict[str, Any] | None = None) -> Path | None:
+        photo = self.folder / f"{rid}{PHOTO_SUFFIX}"
+        if photo.is_file():
+            return photo
         named = (recipe or {}).get("image")
         candidates = [named] if named else [f"{rid}{ext}" for ext in IMAGE_EXTS]
         for name in candidates:
@@ -242,6 +248,27 @@ class RecipeLibrary:
         entry = self.get(rid)
         if entry is None:  # pragma: no cover - only if the file vanished at once
             raise ValueError("the recipe couldn't be read back")
+        return entry
+
+    def set_photo(self, rid: str, jpeg: bytes | None) -> LibraryEntry:
+        """Save (or with None, remove) the photo taken on the phone. Raises KeyError / ValueError."""
+        if rid not in self.ids():
+            raise KeyError(rid)
+        path = self.folder / f"{rid}{PHOTO_SUFFIX}"
+        if jpeg is None:
+            path.unlink(missing_ok=True)
+        else:
+            if not jpeg.startswith(b"\xff\xd8\xff"):
+                raise ValueError("that isn't a JPEG photo")
+            if len(jpeg) > MAX_PHOTO_BYTES:
+                raise ValueError("that photo is too big")
+            tmp = path.with_name(path.name + ".tmp")
+            tmp.write_bytes(jpeg)
+            tmp.replace(path)
+        self.reload([rid])
+        entry = self.get(rid)
+        if entry is None:  # pragma: no cover
+            raise KeyError(rid)
         return entry
 
     def save_annotations(self, rid: str, update: Annotations) -> LibraryEntry:
