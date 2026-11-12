@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -68,7 +69,9 @@ fun TimerTray(timers: List<KitchenTimer>, actions: TimerActions, modifier: Modif
     AnimatedVisibility(visible = timers.isNotEmpty(), modifier = modifier) {
         val now = rememberNow()
         Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
+            // It sits in a Scaffold's bottomBar, which doesn't keep clear of the system navigation bar by itself.
+            Modifier.fillMaxWidth().navigationBarsPadding().horizontalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             timers.sortedBy { it.changedAtMillis }.forEach { TimerCard(it, now, actions, large) }
