@@ -10,8 +10,8 @@ import app.mise.core.model.Recipe
  * its group ("minced ginger (Marinade)"), else `#0003`.
  */
 object StepText {
-    private val STORED = Regex("""\{(\d{4})(:name)?}""")
-    private val EDITABLE = Regex("""\{([^{}\[\]]+)}|\[([^{}\[\]]+)]""")
+    private val STORED = Regex("""\{(\d{4})(:name)?\}""")
+    private val EDITABLE = Regex("""\{([^{}\[\]]+)\}|\[([^{}\[\]]+)\]""")
 
     /** The label each ingredient gets in the editor. */
     fun labels(recipe: Recipe): Map<String, String> {
