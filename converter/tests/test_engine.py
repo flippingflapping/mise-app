@@ -28,7 +28,7 @@ def test_sync_conversion_end_to_end(make_converter):
     assert recipe["source_text_sha256"] == docs[0].sha256
     assert (conv.out_dir / f"{RID}.source.txt").read_text(encoding="utf-8") == docs[0].text
     e = conv.manifest.get("lamb-curry-for-kothu.txt")
-    assert e.status == mf.NEEDS_REVIEW and e.recipe_id == RID and e.prompt_version == "1"
+    assert e.status == mf.NEEDS_REVIEW and e.recipe_id == RID and e.prompt_version == "2"
     # the request was cacheable and used structured outputs
     assert client.calls[0]["system"][0]["cache_control"]["type"] == "ephemeral"
 

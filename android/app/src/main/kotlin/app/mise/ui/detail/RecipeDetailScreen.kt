@@ -113,6 +113,7 @@ import app.mise.ui.components.StatusBanner
 import app.mise.ui.components.StepText
 import app.mise.ui.timers.TimerActions
 import app.mise.ui.timers.TimerTray
+import app.mise.ui.timers.rememberTimerLengthPicker
 import app.mise.ui.timers.rememberTimerStarter
 import kotlinx.coroutines.launch
 
@@ -158,6 +159,7 @@ fun RecipeDetailScreen(
             )
         }
     }
+    val pickTimer = rememberTimerLengthPicker()
     val startTimer = rememberTimerStarter(onDenied = {
         scope.launch { snackbar.showSnackbar("Notifications are off — timers will only ring while Mise is open.") }
     })
@@ -318,7 +320,7 @@ fun RecipeDetailScreen(
                         factor = factor,
                         mode = mode,
                         onIngredient = viewModel::highlight,
-                        onStartTimer = { spec -> startTimer { viewModel.timers.start(recipe, step, spec) } },
+                        onStartTimer = { spec -> pickTimer.pick(spec, step.title) { s -> startTimer { viewModel.timers.start(recipe, step, s) } } },
                         onCookFromHere = { onCook(index) },
                     )
                 }

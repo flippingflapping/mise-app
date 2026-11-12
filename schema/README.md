@@ -45,12 +45,18 @@ Mirrors (kept in sync by tests on both sides — `pytest shared` and `./gradlew 
 | `amount` | ✔ (nullable) | number, or `null` for "to taste" |
 | `amount_max` | | upper end of a range ("10–12") |
 | `unit` | ✔ (nullable) | `g kg ml l tsp tbsp cup fl_oz oz lb pinch`, or `null` for countable items |
+| `equivalent` | | `{amount, unit}`: the same quantity in the other system **as the source states it** ("2 cups (250g)" → `{"amount": 250, "unit": "g"}`). The app shows it in Metric/US mode instead of computing a conversion |
 | `optional` | | default `false` |
 | `substitutes` | | "or 3 tbsp canned chopped tomatoes" |
 | `scales` | | default `true`; `false` for things that shouldn't scale |
 | `aisle` | | shopping-list aisle (phase 2) |
 
 The same ingredient used in two roles gets two ids (ginger in the marinade and in the curry).
+
+`equivalent` was added later as an optional field, so `schema_version` stays 1 (older apps ignore it).
+Editing an ingredient's amount, range or unit drops its `equivalent`, which no longer matches.
+Without one, Metric mode turns cups of common solids (flour, sugar, rice, butter…) into grams using
+typical weights per cup, and everything else (liquids, anything unknown) into ml.
 
 ## Step
 

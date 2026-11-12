@@ -43,6 +43,10 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.performSemanticsAction
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -125,9 +129,9 @@ class ScreensTest {
         waitFor("Serves 3 portions of kothu (recipe makes 2)")
         compose.onNodeWithText("US").performClick()
         compose.waitUntil(10_000) {
-            runCatching { compose.onNode(hasScrollAction()).performScrollToNode(hasText("1⅝ lb")) }.isSuccess
+            runCatching { compose.onNode(hasScrollAction()).performScrollToNode(hasText("1¾ lb")) }.isSuccess
         }
-        compose.onNodeWithText("1⅝ lb").assertIsDisplayed() // 750 g lamb
+        compose.onNodeWithText("1¾ lb").assertIsDisplayed() // the source's own 1 lb 2 oz × 1.5
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Metric"))
         compose.onNodeWithText("Metric").performClick()
         compose.waitUntil(10_000) {
@@ -142,8 +146,16 @@ class ScreensTest {
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Brown the lamb"))
         compose.onNodeWithText("Timer · 5–7 min").assertExists()
         compose.onNodeWithText("Timer · 5–7 min").performClick()
+        // A ranged timer asks how long first: 5, 5½, 6, 6½ or 7 min. Pick the middle one.
+        waitFor("Start")
+        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(2f) }
+        waitFor("6 min")
+        compose.onNodeWithText("Start").performClick()
         compose.waitUntil(10_000) { timers.store.timers.value.isNotEmpty() }
-        assertThat(timers.store.timers.value.single().label).isEqualTo("Brown the lamb")
+        val started = timers.store.timers.value.single()
+        assertThat(started.label).isEqualTo("Brown the lamb")
+        assertThat(started.minSeconds to started.maxSeconds).isEqualTo(360 to 420) // check at 6, can run on to 7
         waitFor("Brown the lamb") // and it shows in the tray
         screenshot("detail-steps")
     }
@@ -187,6 +199,8 @@ class ScreensTest {
         waitFor("Step 2 of 13")
         compose.onNodeWithText("You'll need").assertIsDisplayed()
         compose.onNodeWithText("Start 5–7 min timer").performClick()
+        waitFor("Start")
+        compose.onNodeWithText("Start").performClick() // the shortest, as offered
         compose.waitUntil(10_000) {
             compose.onAllNodes(androidx.compose.ui.test.hasContentDescription("Pause Brown the lamb")).fetchSemanticsNodes().isNotEmpty()
         }

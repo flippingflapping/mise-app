@@ -138,9 +138,13 @@ Either way the phone never sees any key or login. Adding recipes needs the PC se
 * **Servings:** − / + (half steps for small amounts). Tap any **amount in the ingredient list** to
   scale the whole recipe to what you have ("I've only got 400 g lamb").
 * **Units:** *Original* (as written), *Metric* or *US*. Weights and liquids convert; teaspoons,
-  tablespoons, pinches and "4 cardamom pods" stay as they are. Both settings are remembered per recipe.
+  tablespoons, pinches and "4 cardamom pods" stay as they are. When the recipe gives both ("2 cups
+  (250g) flour"), the other mode shows the recipe's own figure. Otherwise Metric shows cups of solids
+  like flour, sugar, rice or butter in grams (typical weights), and liquids in ml. Both settings are
+  remembered per recipe.
 * **Steps:** amounts appear inline, highlighted. Tap one to find that ingredient in the list.
-* **Timers:** tap a step's timer. For ranges like 5–7 min it rings "check now" at 5, then offers
+* **Timers:** tap a step's timer. For ranges like 5–7 min a slider lets you pick where in the range
+  to start (5, 5½, 6, 6½ or 7 min). It rings "check now" at that point, then offers
   **+1 min** or **To max**. Several timers can run at once; they keep going (and ring) with the app
   in the background or the screen locked. On first use Android asks to allow notifications — allow
   it, or timers can only beep while the app is running.

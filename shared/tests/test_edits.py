@@ -72,3 +72,12 @@ def test_add_and_remove_ingredients_and_reword_steps():
     assert [i["id"] for i in out["ingredients"]][-1] == "9001" and "0001" not in [i["id"] for i in out["ingredients"]]
     assert next(s for s in out["steps"] if s["id"] == "s2")["content"] == "Heat {0007}, add {9001} and brown it."
     assert s2["content"] != "Heat {0007}, add {9001} and brown it."  # original untouched
+
+
+def test_changing_an_amount_drops_the_sources_other_system_figure():
+    lamb = {"name": "lamb neck or shoulder fillets", "prep": "diced into 4cm (1½in) pieces", "amount": 500, "unit": "g"}
+    renamed = apply_edits(RECIPE, {"ingredients": {"0001": {**lamb, "name": "lamb shoulder"}}})
+    assert renamed["ingredients"][0]["equivalent"] == {"amount": 18, "unit": "oz"}  # same amount: still true
+    more = apply_edits(RECIPE, {"ingredients": {"0001": {**lamb, "amount": 750}}})
+    assert "equivalent" not in more["ingredients"][0]
+    assert not schema_errors(more)

@@ -74,6 +74,8 @@ data class Ingredient(
     @SerialName("amount_max") val amountMax: Double? = null,
     /** null = countable; the counting noun lives in [name]. Always encoded. */
     @EncodeDefault val unit: MeasureUnit? = null,
+    /** The same quantity in the other measuring system, as the source states it ("2 cups (250g)"). */
+    val equivalent: Equivalent? = null,
     val optional: Boolean = false,
     val substitutes: String? = null,
     val scales: Boolean = true,
@@ -94,6 +96,10 @@ enum class MeasureUnit {
     @SerialName("lb") LB,
     @SerialName("pinch") PINCH,
 }
+
+/** An amount the source also gives in the other system; shown instead of computing a conversion. */
+@Serializable
+data class Equivalent(val amount: Double, val unit: MeasureUnit)
 
 @Serializable
 data class Step(

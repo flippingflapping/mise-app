@@ -123,6 +123,10 @@ decisions I made on my own (with the choice and why). Progress is tracked at the
    Original/US mode (in Metric mode ≥ 16 tbsp becomes ml, since a cup isn't metric).
 7. **US volumes**: ≥ ¼ cup → cups (nearest ⅛), smaller → tbsp/tsp. fl oz is kept only in Original
    mode when authored that way.
+   **Stated equivalents first**: when the source gives both systems ("2 cups (250g)"), the converter
+   keeps the second as `equivalent` and Metric/US modes show it (scaled) instead of computing one.
+   Without one, Metric turns cups of known solids into grams via typical weights per cup
+   (`Densities`); liquids and unknown ingredients still go to ml.
 8. **Rounding**: g/ml nearest 1 below 50, nearest 5 above (per brief); kg/l nearest 0.05 shown as a
    fraction glyph only on exact quarters, else a short decimal ("1.1 kg", "1.35 kg"); oz nearest ¼;
    lb nearest ⅛ (gives the brief's "2¼ lb lamb" and keeps 500 g honest as "1⅛ lb" rather than "1 lb");

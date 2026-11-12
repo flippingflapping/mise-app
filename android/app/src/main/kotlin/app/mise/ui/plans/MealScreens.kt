@@ -69,6 +69,7 @@ import app.mise.core.feast.FeastPlanner
 import app.mise.core.feast.FeastStyle
 import app.mise.core.feast.FeastTask
 import app.mise.core.timer.StepTimers
+import app.mise.core.timer.TimerSpec
 import app.mise.data.db.FeastSummary
 import app.mise.data.repo.FeastDetail
 import app.mise.data.repo.PlansRepository
@@ -77,6 +78,7 @@ import app.mise.timers.TimerController
 import app.mise.ui.components.EmptyState
 import app.mise.ui.timers.TimerActions
 import app.mise.ui.timers.TimerTray
+import app.mise.ui.timers.rememberTimerLengthPicker
 import app.mise.ui.timers.rememberNow
 import app.mise.ui.timers.rememberTimerStarter
 import dagger.assisted.Assisted
@@ -183,11 +185,10 @@ class MealPlanViewModel @AssistedInject constructor(
         then()
     }
 
-    fun startTimer(task: FeastTask) {
+    fun startTimer(task: FeastTask, spec: TimerSpec) {
         val d = detail.value ?: return
         val recipe = d.dishes.firstOrNull { it.first.id == task.recipeId }?.first ?: return
         val step = recipe.steps.firstOrNull { it.id == task.stepId } ?: return
-        val spec = task.timer ?: return
         timers.start(recipe, step, spec)
     }
 
@@ -257,6 +258,7 @@ fun MealPlanScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var opened by remember { mutableStateOf(setOf<String>()) }
     val startTimer = rememberTimerStarter()
+    val pickTimer = rememberTimerLengthPicker()
     val actions = remember(viewModel) {
         object : TimerActions {
             override fun pause(id: String) = viewModel.timers.pause(id)
@@ -292,7 +294,7 @@ fun MealPlanScreen(
         val taskActions = TaskActions(
             time = { t -> if (pro) formatTime(t.startMillis) else null },
             done = { viewModel.setDone(it.id, true) },
-            timer = { t -> startTimer { viewModel.startTimer(t) } },
+            timer = { t -> t.timer?.let { spec -> pickTimer.pick(spec, t.title) { s -> startTimer { viewModel.startTimer(t, s) } } } },
             open = { t -> stepOpener(d, t, onOpenStep) },
         )
 

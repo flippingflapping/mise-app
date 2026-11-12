@@ -67,6 +67,16 @@
         "amount": { "type": ["number", "null"], "exclusiveMinimum": 0 },
         "amount_max": { "type": "number", "exclusiveMinimum": 0 },
         "unit": { "$ref": "#/$defs/unit" },
+        "equivalent": {
+          "description": "The same quantity in the other measuring system, as the source itself states it (\"2 cups (250g) flour\" → 250 g). Apps prefer it to a computed conversion; a range scales it in proportion.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["amount", "unit"],
+          "properties": {
+            "amount": { "type": "number", "exclusiveMinimum": 0 },
+            "unit": { "enum": ["g", "kg", "ml", "l", "tsp", "tbsp", "cup", "fl_oz", "oz", "lb"] }
+          }
+        },
         "optional": { "type": "boolean", "default": false },
         "substitutes": { "type": "string" },
         "scales": { "type": "boolean", "default": true },

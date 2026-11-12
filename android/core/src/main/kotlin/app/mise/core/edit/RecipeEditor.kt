@@ -40,6 +40,8 @@ object RecipeEditor {
                     amount = e.amount,
                     amountMax = e.amountMax,
                     unit = e.unit,
+                    // The source's other-system amount only holds while the amount it matches does.
+                    equivalent = ing.equivalent.takeIf { e.amount == ing.amount && e.amountMax == ing.amountMax && e.unit == ing.unit },
                     optional = e.optional,
                 )
             },

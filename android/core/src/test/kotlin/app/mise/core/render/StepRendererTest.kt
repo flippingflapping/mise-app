@@ -32,12 +32,12 @@ class StepRendererTest {
             Triple("{0016}", 3.0 to UnitMode.ORIGINAL, "2¼ tbsp roasted curry powder"),
             Triple("{0016}", 2.0 to UnitMode.METRIC, "1½ tbsp roasted curry powder"),
             Triple("{0018}", 3.0 to UnitMode.ORIGINAL, "1 tbsp chilli powder"),
-            Triple("{0023}", 2.0 to UnitMode.US, "1 cup stock"),
+            Triple("{0023}", 2.0 to UnitMode.US, "1⅛ cups stock"), // the source's own 9 fl oz
             Triple("{0023}", 8.0 to UnitMode.ORIGINAL, "1 l stock"),
             Triple("{0024}", 2.0 to UnitMode.US, "⅜ cup coconut milk"),
             Triple("{0021}", 1.0 to UnitMode.ORIGINAL, "5–6 curry leaves"),
             Triple("{0022}", 3.0 to UnitMode.ORIGINAL, "1½ tomato"),
-            Triple("{0012}", 2.0 to UnitMode.US, "5¼ oz onion"),
+            Triple("{0012}", 2.0 to UnitMode.US, "5½ oz onion"), // the source's own 5½ oz
         ),
         { "${it.first} @ ${it.second}" },
     ) { (ph, setting, exp) -> exp to chip(ph, setting.first, setting.second) }

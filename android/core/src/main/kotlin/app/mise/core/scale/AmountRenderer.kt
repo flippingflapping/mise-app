@@ -4,6 +4,7 @@ import app.mise.core.format.Fractions
 import app.mise.core.format.SpokenNumbers
 import app.mise.core.model.Ingredient
 import app.mise.core.model.MeasureUnit
+import app.mise.core.units.Densities
 import app.mise.core.units.Dimension
 import app.mise.core.units.UnitFamily
 import app.mise.core.units.UnitMode
@@ -34,6 +35,9 @@ data class RenderedAmount(
  *
  * * Weights convert g/kg ↔ oz/lb and liquid volumes ml/l ↔ cups (US) in Metric/US modes.
  *   tsp, tbsp, pinch and countables are never converted.
+ * * A conversion uses the source's own figure when it gives one ([Ingredient.equivalent]: "2 cups
+ *   (250g)" shows 250 g in Metric). Without one, Metric shows cups of known solids in grams
+ *   ([Densities]); liquids and unknowns go to ml.
  * * After scaling, units promote/demote within their family (1000 g → 1 kg, 3 tsp → 1 tbsp,
  *   16 tbsp → 1 cup, ½ tbsp → 1½ tsp).
  * * At scale 1 with no conversion, the authored value is shown exactly as written.
@@ -75,6 +79,17 @@ object AmountRenderer {
                 val unit = ingredient.unit!!
                 val source = Units.family(unit)
                 val target = targetFamily(source, mode)
+                if (target != source) {
+                    stated(ingredient, target)?.let { return render(it, factor, mode, normalize) }
+                    if (mode == UnitMode.METRIC && source == UnitFamily.US_CUPS) {
+                        Densities.gramsPerMl(ingredient)?.let { perMl ->
+                            val grams = { v: Double -> v * Units.toBase(unit) * perMl }
+                            val outUnit = pickUnit(grams(lo), UnitFamily.METRIC_MASS, mode)
+                            val conv = { v: Double -> roundIn(outUnit, grams(v) / Units.toBase(outUnit)) }
+                            return build(conv(lo), hi?.let(conv), outUnit)
+                        }
+                    }
+                }
                 if (unchanged && target == source) {
                     build(lo, hi, unit)
                 } else {
@@ -85,6 +100,31 @@ object AmountRenderer {
                 }
             }
         }
+    }
+
+    /**
+     * [ingredient] as the source also states it, when that's in the measuring system of [target]
+     * (a range keeps its proportions); else null.
+     */
+    private fun stated(ingredient: Ingredient, target: UnitFamily): Ingredient? {
+        val eq = ingredient.equivalent ?: return null
+        val amount = ingredient.amount ?: return null
+        val system = system(target) ?: return null
+        if (system(Units.family(eq.unit)) != system) return null
+        return ingredient.copy(
+            amount = eq.amount,
+            amountMax = ingredient.amountMax?.let { it / amount * eq.amount },
+            unit = eq.unit,
+            equivalent = null,
+        )
+    }
+
+    private enum class MeasuringSystem { METRIC, US }
+
+    private fun system(family: UnitFamily): MeasuringSystem? = when (family) {
+        UnitFamily.METRIC_MASS, UnitFamily.METRIC_VOLUME -> MeasuringSystem.METRIC
+        UnitFamily.US_MASS, UnitFamily.US_CUPS, UnitFamily.FL_OZ, UnitFamily.SPOONS -> MeasuringSystem.US
+        UnitFamily.PINCH, UnitFamily.COUNT -> null
     }
 
     /** Text for a `{0001}` placeholder: "500 g lamb", "a pinch of salt", "salt, to taste". */

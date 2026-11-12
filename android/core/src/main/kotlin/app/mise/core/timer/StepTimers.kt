@@ -39,6 +39,30 @@ object StepTimers {
         }
     }
 
+    /**
+     * Lengths to offer on a slider for a ranged timer: both ends plus evenly spaced stops between
+     * ([intervals] equal steps), rounded to times that read well (5 s under 2 minutes of range, else
+     * 15 s, else whole minutes over 20 minutes). A fixed timer has just its one length.
+     */
+    fun choices(spec: TimerSpec, intervals: Int = 4): List<Int> {
+        val max = spec.maxSeconds?.takeIf { spec.isRange } ?: return listOf(spec.minSeconds)
+        val span = max - spec.minSeconds
+        val step = when {
+            span < 2 * 60 -> 5
+            span <= 20 * 60 -> 15
+            else -> 60
+        }
+        val between = (1 until intervals).map { i ->
+            val exact = spec.minSeconds + span * i / intervals.toDouble()
+            (Math.round(exact / step) * step).toInt()
+        }
+        return (listOf(spec.minSeconds) + between + max).distinct().sorted()
+    }
+
+    /** What a timer started at [seconds] on a ranged step runs as: "check now" there, still able to run on to the end. */
+    fun chosen(spec: TimerSpec, seconds: Int): TimerSpec =
+        TimerSpec(seconds, spec.maxSeconds?.takeIf { it > seconds })
+
     /** "5–7 min", "1 min", "45 s", "1 h 30 min", "90 s–2 min". */
     fun formatRange(spec: TimerSpec): String {
         val max = spec.maxSeconds?.takeIf { spec.isRange } ?: return formatDuration(spec.minSeconds)

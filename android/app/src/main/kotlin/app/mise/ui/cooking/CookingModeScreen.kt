@@ -70,6 +70,7 @@ import app.mise.ui.components.StepText
 import app.mise.ui.detail.AdvancePrepBanner
 import app.mise.ui.timers.TimerActions
 import app.mise.ui.timers.TimerTray
+import app.mise.ui.timers.rememberTimerLengthPicker
 import app.mise.ui.timers.rememberTimerStarter
 import kotlinx.coroutines.launch
 
@@ -84,6 +85,7 @@ fun CookingModeScreen(viewModel: CookingViewModel, startStep: Int, onClose: () -
     val recipe = state.recipe
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val pickTimer = rememberTimerLengthPicker()
     val startTimer = rememberTimerStarter(onDenied = {
         scope.launch { snackbar.showSnackbar("Notifications are off — timers will only ring while Mise is open.") }
     })
@@ -143,7 +145,7 @@ fun CookingModeScreen(viewModel: CookingViewModel, startStep: Int, onClose: () -
                 factor = state.factor,
                 mode = state.unitMode,
                 timers = state.timers,
-                onStartTimer = { step, spec -> startTimer { viewModel.timers.start(recipe, step, spec) } },
+                onStartTimer = { step, spec -> pickTimer.pick(spec, step.title) { s -> startTimer { viewModel.timers.start(recipe, step, s) } } },
             )
         }
     }

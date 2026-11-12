@@ -52,6 +52,15 @@ def test_normalize_drops_blank_and_zero_markers():
     assert "times" not in out
 
 
+def test_normalize_keeps_the_sources_other_system_figure():
+    llm = fixture_llm_output()
+    assert normalize(llm)["ingredients"][0]["equivalent"] == {"amount": 18, "unit": "oz"}  # 500g (1lb 2oz)
+    llm["ingredients"][0]["equivalent_amount"] = 0  # none stated
+    assert "equivalent" not in normalize(llm)["ingredients"][0]
+    llm["ingredients"][0].update(equivalent_amount=500, equivalent_unit="g")  # a repeat of the amount itself
+    assert "equivalent" not in normalize(llm)["ingredients"][0]
+
+
 def test_system_prompt_is_complete_and_stable():
     sp = system_prompt()
     assert "{{" not in sp
@@ -60,7 +69,7 @@ def test_system_prompt_is_complete_and_stable():
     assert "Never invent quantities" in sp
     assert "prompt_version" not in sp  # the version comment is stripped
     assert sp == system_prompt()
-    assert prompt_version() == "1"
+    assert prompt_version() == "2"
 
 
 def test_request_params_cache_the_system_prompt():

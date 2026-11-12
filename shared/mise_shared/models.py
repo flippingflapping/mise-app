@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 
 class Unit(str, Enum):
@@ -54,6 +54,20 @@ class Times(_Strict):
     total_minutes: Optional[int] = Field(default=None, ge=0)
 
 
+class Equivalent(_Strict):
+    """The same quantity in the other measuring system, as the source states it ("2 cups (250g)")."""
+
+    amount: float = Field(gt=0)
+    unit: Unit
+
+    @field_validator("unit")
+    @classmethod
+    def _measured(cls, u: Unit) -> Unit:
+        if u is Unit.pinch:
+            raise ValueError("an equivalent is a measured amount, not a pinch")
+        return u
+
+
 class Ingredient(_Strict):
     id: str = Field(pattern=r"^[0-9]{4}$")
     group: Optional[str] = None
@@ -63,6 +77,7 @@ class Ingredient(_Strict):
     amount: Optional[float] = Field(gt=0)
     amount_max: Optional[float] = Field(default=None, gt=0)
     unit: Optional[Unit]
+    equivalent: Optional[Equivalent] = None
     optional: Optional[bool] = None
     substitutes: Optional[str] = None
     scales: Optional[bool] = None

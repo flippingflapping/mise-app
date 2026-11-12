@@ -7,7 +7,7 @@
   "advance_prep": ["Marinate the lamb overnight"],
   "tags": ["sri lankan", "lamb", "curry", "kothu"],
   "ingredients": [
-    { "id": "0001", "group": "Marinade", "name": "lamb neck or shoulder fillets", "short_name": "lamb", "prep": "diced into 4cm (1½in) pieces", "amount": 500, "unit": "g" },
+    { "id": "0001", "group": "Marinade", "name": "lamb neck or shoulder fillets", "short_name": "lamb", "prep": "diced into 4cm (1½in) pieces", "amount": 500, "unit": "g", "equivalent": { "amount": 18, "unit": "oz" } },
     { "id": "0002", "group": "Marinade", "name": "minced ginger", "short_name": "ginger", "amount": 1, "unit": "tsp" },
     { "id": "0003", "group": "Marinade", "name": "minced garlic", "short_name": "garlic", "amount": 1, "unit": "tsp" },
     { "id": "0004", "group": "Marinade", "name": "ground turmeric", "short_name": "turmeric", "amount": 0.5, "unit": "tsp" },
@@ -18,7 +18,7 @@
     { "id": "0009", "group": "Curry", "name": "cinnamon stick, 9cm (3½in)", "short_name": "cinnamon stick", "amount": 1, "unit": null },
     { "id": "0010", "group": "Curry", "name": "green cardamom pods", "short_name": "cardamom pods", "amount": 4, "unit": null },
     { "id": "0011", "group": "Curry", "name": "cloves", "short_name": "cloves", "amount": 4, "unit": null },
-    { "id": "0012", "group": "Curry", "name": "onion (about 1 medium)", "short_name": "onion", "prep": "sliced", "amount": 150, "unit": "g" },
+    { "id": "0012", "group": "Curry", "name": "onion (about 1 medium)", "short_name": "onion", "prep": "sliced", "amount": 150, "unit": "g", "equivalent": { "amount": 5.5, "unit": "oz" } },
     { "id": "0013", "group": "Curry", "name": "salt, for the onion", "short_name": "salt", "amount": 1, "unit": "pinch" },
     { "id": "0014", "group": "Curry", "name": "minced ginger", "short_name": "ginger", "amount": 1, "unit": "tbsp" },
     { "id": "0015", "group": "Curry", "name": "minced garlic", "short_name": "garlic", "amount": 1, "unit": "tbsp" },
@@ -29,8 +29,8 @@
     { "id": "0020", "group": "Curry", "name": "pandan leaf, 5cm (2in) piece", "short_name": "pandan leaf", "amount": 1, "unit": null },
     { "id": "0021", "group": "Curry", "name": "curry leaves", "short_name": "curry leaves", "amount": 10, "amount_max": 12, "unit": null },
     { "id": "0022", "group": "Curry", "name": "large ripe tomato", "short_name": "tomato", "prep": "sliced", "substitutes": "or 3 tbsp canned chopped tomatoes", "amount": 1, "unit": null },
-    { "id": "0023", "group": "Curry", "name": "stock or water", "short_name": "stock", "amount": 250, "unit": "ml" },
-    { "id": "0024", "group": "Curry", "name": "coconut milk", "short_name": "coconut milk", "amount": 100, "unit": "ml" },
+    { "id": "0023", "group": "Curry", "name": "stock or water", "short_name": "stock", "amount": 250, "unit": "ml", "equivalent": { "amount": 9, "unit": "fl_oz" } },
+    { "id": "0024", "group": "Curry", "name": "coconut milk", "short_name": "coconut milk", "amount": 100, "unit": "ml", "equivalent": { "amount": 3.5, "unit": "fl_oz" } },
     { "id": "0025", "group": "Curry", "name": "green chillies", "short_name": "green chillies", "prep": "halved widthways", "optional": true, "amount": 2, "unit": null },
     { "id": "0026", "group": "Curry", "name": "salt, to finish", "short_name": "salt", "amount": 0.5, "unit": "tsp" }
   ],

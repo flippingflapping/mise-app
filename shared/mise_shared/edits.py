@@ -41,6 +41,8 @@ def apply_edits(recipe: dict[str, Any], edits: Edits | dict[str, Any] | None) ->
             ing["short_name"] = change.name  # the short name followed the name, so keep following it
         ing["name"] = change.name
         values = change.model_dump(mode="json")
+        if any(values.get(f) != ing.get(f) for f in ("amount", "amount_max", "unit")):
+            ing.pop("equivalent", None)  # the source's other-system amount no longer matches
         for f in _INGREDIENT_FIELDS:
             v = values.get(f)
             if v is None and f not in ("amount", "unit"):

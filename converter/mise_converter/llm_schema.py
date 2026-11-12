@@ -15,6 +15,7 @@ import copy
 from typing import Any
 
 UNITS = ["g", "kg", "ml", "l", "tsp", "tbsp", "cup", "fl_oz", "oz", "lb", "pinch", None]
+EQUIVALENT_UNITS = ["g", "kg", "ml", "l", "tsp", "tbsp", "cup", "fl_oz", "oz", "lb", None]
 HEATS = ["low", "medium_low", "medium", "medium_high", "high", None]
 SOURCE_TYPES = ["book", "web", "family", "other"]
 
@@ -50,6 +51,8 @@ LLM_RECIPE_SCHEMA: dict[str, Any] = _obj(
                     "amount": {"anyOf": [_NUM, {"type": "null"}]},
                     "amount_max": _NUM,
                     "unit": {"enum": UNITS},
+                    "equivalent_amount": _NUM,
+                    "equivalent_unit": {"enum": EQUIVALENT_UNITS},
                     "optional": _BOOL,
                     "substitutes": _STR,
                     "scales": _BOOL,
@@ -133,6 +136,9 @@ def normalize(llm: dict[str, Any]) -> dict[str, Any]:
         if amax is not None and ing["amount"] is not None and amax != ing["amount"]:
             ing["amount_max"] = amax
         ing["unit"] = i.get("unit")
+        eq_amount, eq_unit = _positive(i.get("equivalent_amount")), i.get("equivalent_unit")
+        if eq_amount is not None and eq_unit and ing["amount"] is not None and eq_unit != ing["unit"]:
+            ing["equivalent"] = {"amount": eq_amount, "unit": eq_unit}
         if i.get("optional") is True:
             ing["optional"] = True
         if s := _clean_str(i.get("substitutes")):
@@ -202,6 +208,8 @@ def denormalize(recipe: dict[str, Any]) -> dict[str, Any]:
                 "amount": i["amount"],
                 "amount_max": i.get("amount_max", 0),
                 "unit": i["unit"],
+                "equivalent_amount": (i.get("equivalent") or {}).get("amount", 0),
+                "equivalent_unit": (i.get("equivalent") or {}).get("unit"),
                 "optional": i.get("optional", False),
                 "substitutes": i.get("substitutes", ""),
                 "scales": i.get("scales", True),
