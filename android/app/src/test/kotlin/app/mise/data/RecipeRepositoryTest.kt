@@ -19,6 +19,9 @@ import app.mise.di.Clock
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -34,12 +37,18 @@ class RecipeRepositoryTest {
     private var source = FakeSource()
     private var now = 1_000L
 
+    /** Where the repository's immediate background pushes run, so a test can wait for them. */
+    private val background = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+    /** Wait for background pushes still in flight (they finish on Room's threads, not the test's). */
+    private suspend fun settle() = background.coroutineContext.job.children.toList().joinAll()
+
     @Before fun setUp() {
         db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), MiseDatabase::class.java)
             .allowMainThreadQueries().build()
         repo = RecipeRepository(
             db, db.recipes(), db.annotations(), db.viewState(), db.sourceTexts(), settings,
-            SourceProvider { source }, Clock { now }, CoroutineScope(Dispatchers.Unconfined),
+            SourceProvider { source }, Clock { now }, background,
         )
         source.put(TestFixtures.lamb, "\"v1\"")
     }
@@ -100,6 +109,7 @@ class RecipeRepositoryTest {
         assertThat(d.cookNotes).containsExactly("less chilli")
         assertThat(d.status).isEqualTo(RecipeStatus.READY) // reviewed locally, even offline
         assertThat(db.annotations().dirty()).hasSize(1)
+        settle()
         assertThat(source.puts).isEmpty()
 
         source.unreachable = false
@@ -121,6 +131,7 @@ class RecipeRepositoryTest {
 
         source.unreachable = true
         repo.setFavorite(id, false) // dirty, can't push
+        settle()
         source.unreachable = false
         source.put(TestFixtures.lamb.copy(user = UserData(favorite = true)), "\"v2\"")
         // push happens first in sync, so the server gets false; the refetch then agrees
