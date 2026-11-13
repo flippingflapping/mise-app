@@ -17,6 +17,11 @@ class TimerChoicesTest {
         assertThat(StepTimers.choices(TimerSpec(60 * 60, 90 * 60))).containsExactly(3600, 4080, 4500, 4980, 5400).inOrder()
     }
 
+    @Test fun rangesOverAnHourRoundToFiveMinutes() {
+        // 1½–4 h: quarter steps are 2 h 7½ min, 2 h 45 min, 3 h 22½ min
+        assertThat(StepTimers.choices(TimerSpec(90 * 60, 4 * 60 * 60))).containsExactly(5400, 7800, 9900, 12300, 14400).inOrder()
+    }
+
     @Test fun aFixedTimerHasOneLength() {
         assertThat(StepTimers.choices(TimerSpec(300, null))).containsExactly(300)
         assertThat(StepTimers.choices(TimerSpec(300, 300))).containsExactly(300)
